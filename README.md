@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Habit Tracker Pro (MVP Starter)
 
-## Getting Started
+Modern SaaS-ready habit tracker built with Next.js App Router, Prisma/Postgres, NextAuth, and Tailwind.
 
-First, run the development server:
+### Tech Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- Next.js 16 + React 19
+- Prisma ORM + PostgreSQL
+- NextAuth (Google OAuth + Email/Password)
+- Tailwind CSS (dark modern dashboard)
+- Recharts-ready analytics surfaces
+- AI coach endpoint scaffold (Groq-ready)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Included MVP
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Habit CRUD (`/api/habits`, `/api/habits/:id`)
+- Daily habit logs (`/api/logs`)
+- Streak + XP update logic
+- Overview + life score stats APIs
+- Leaderboard + social feed APIs
+- Dashboard, habits, calendar, analytics, social, AI coach screens
+- Protected app routes via middleware
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Setup
 
-## Learn More
+1. Copy env file:
+   - `cp .env.example .env` (or manually create `.env` on Windows)
+2. Fill required values in `.env`
+3. Generate Prisma client:
+   - `npm run prisma:generate`
+4. Run migrations:
+   - `npm run prisma:migrate`
+5. Start app:
+   - `npm run dev`
 
-To learn more about Next.js, take a look at the following resources:
+### Important Routes
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- UI:
+  - `/` landing
+  - `/sign-in`
+  - `/dashboard`
+  - `/habits`
+  - `/calendar`
+  - `/analytics`
+  - `/social`
+  - `/ai-coach`
+- API:
+  - `/api/auth/[...nextauth]`
+  - `/api/habits`
+  - `/api/logs`
+  - `/api/stats/overview`
+  - `/api/stats/life-score`
+  - `/api/leaderboard`
+  - `/api/social/feed`
+  - `/api/ai/coach`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Deployment (Vercel)
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Push repo to GitHub
+2. Import into Vercel
+3. Add all env vars from `.env.example`
+4. Set build command: `npm run build`
+5. Set install command: `npm install`
+6. Run migrations against production database before first launch

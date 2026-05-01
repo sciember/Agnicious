@@ -24,3 +24,7 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.app-card {
+  @apply rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4 shadow-lg shadow-black/20;
+}
