@@ -5,20 +5,25 @@ import { prisma } from "@/lib/prisma";
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   const userId = session?.user?.id;
-  const [habitsCount, completedCount, streaks, user] = userId
+  const [habitsCount, completedCount, streaks, user, badges, activeChallenges] = userId
     ? await Promise.all([
         prisma.habit.count({ where: { userId, isArchived: false } }),
         prisma.habitLog.count({ where: { userId, status: "DONE" } }),
         prisma.streak.findMany({ where: { userId } }),
-        prisma.user.findUnique({ where: { id: userId }, select: { xp: true } }),
+        prisma.user.findUnique({ where: { id: userId }, select: { xp: true, streakFreezeCount: true } }),
+        prisma.userAchievement.count({ where: { userId } }),
+        prisma.userChallenge.count({ where: { userId, completedAt: null } }),
       ])
-    : [0, 0, [], null];
+    : [0, 0, [], null, 0, 0];
 
   const cards = [
     { label: "Habits", value: habitsCount },
     { label: "Completed Logs", value: completedCount },
     { label: "Current Streak", value: Math.max(0, ...streaks.map((s) => s.currentCount)) },
     { label: "XP", value: user?.xp ?? 0 },
+    { label: "Streak Freezes", value: user?.streakFreezeCount ?? 0 },
+    { label: "Badges", value: badges },
+    { label: "Active Challenges", value: activeChallenges },
   ];
 
   return (

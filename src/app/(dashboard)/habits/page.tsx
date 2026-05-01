@@ -10,6 +10,8 @@ type Habit = {
   lifeArea: string;
 };
 
+type Prediction = Record<string, number>;
+
 const defaultHabit = {
   title: "",
   description: "",
@@ -22,6 +24,8 @@ const defaultHabit = {
 export default function HabitsPage() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [form, setForm] = useState(defaultHabit);
+  const [insights, setInsights] = useState<Record<string, string>>({});
+  const [predictions, setPredictions] = useState<Prediction>({});
 
   async function loadHabits() {
     const res = await fetch("/api/habits");
@@ -36,6 +40,39 @@ export default function HabitsPage() {
     });
     setForm(defaultHabit);
     await loadHabits();
+  }
+
+  async function logStatus(habitId: string, status: "DONE" | "SKIP" | "FAIL") {
+    await fetch("/api/logs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ habitId, status, date: new Date().toISOString() }),
+    });
+    await loadHabits();
+  }
+
+  async function applyFreeze(habitId: string) {
+    await fetch("/api/streak/freeze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ habitId }),
+    });
+  }
+
+  async function runFailureAnalysis(habitId: string) {
+    const res = await fetch("/api/ai/failure-analysis", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ habitId }),
+    });
+    const data = await res.json();
+    setInsights((p) => ({ ...p, [habitId]: data.analysis ?? "No analysis available." }));
+  }
+
+  async function fetchPrediction(habitId: string) {
+    const res = await fetch(`/api/ai/prediction?habitId=${habitId}`);
+    const data = await res.json();
+    setPredictions((p) => ({ ...p, [habitId]: Number(data.breakProbability ?? 0) }));
   }
 
   useEffect(() => {
@@ -67,6 +104,32 @@ export default function HabitsPage() {
             <p className="text-sm text-zinc-400">
               {habit.type} • {habit.repeatPattern} • {habit.lifeArea}
             </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button className="rounded-md bg-emerald-600 px-2 py-1 text-sm" onClick={() => logStatus(habit.id, "DONE")}>
+                Done
+              </button>
+              <button className="rounded-md bg-amber-600 px-2 py-1 text-sm" onClick={() => logStatus(habit.id, "SKIP")}>
+                Skip
+              </button>
+              <button className="rounded-md bg-rose-600 px-2 py-1 text-sm" onClick={() => logStatus(habit.id, "FAIL")}>
+                Fail
+              </button>
+              <button className="rounded-md border border-zinc-700 px-2 py-1 text-sm" onClick={() => applyFreeze(habit.id)}>
+                Use Freeze
+              </button>
+              <button className="rounded-md border border-zinc-700 px-2 py-1 text-sm" onClick={() => runFailureAnalysis(habit.id)}>
+                Failure Analysis
+              </button>
+              <button className="rounded-md border border-zinc-700 px-2 py-1 text-sm" onClick={() => fetchPrediction(habit.id)}>
+                Break Risk
+              </button>
+            </div>
+            {predictions[habit.id] !== undefined ? (
+              <p className="mt-2 text-sm text-zinc-300">Break probability: {Math.round(predictions[habit.id] * 100)}%</p>
+            ) : null}
+            {insights[habit.id] ? (
+              <p className="mt-2 rounded-md border border-zinc-800 bg-zinc-950 p-2 text-sm text-zinc-300">{insights[habit.id]}</p>
+            ) : null}
           </div>
         ))}
       </div>
