@@ -14,12 +14,12 @@ export default async function DashboardPage() {
         prisma.userAchievement.count({ where: { userId } }),
         prisma.userChallenge.count({ where: { userId, completedAt: null } }),
       ])
-    : [0, 0, [], null, 0, 0];
+    : [0, 0, [] as { currentCount: number }[], null, 0, 0];
 
   const cards = [
     { label: "Habits", value: habitsCount },
     { label: "Completed Logs", value: completedCount },
-    { label: "Current Streak", value: Math.max(0, ...streaks.map((s) => s.currentCount)) },
+    { label: "Current Streak", value: Math.max(0, ...streaks.map((s: { currentCount: number }) => s.currentCount)) },
     { label: "XP", value: user?.xp ?? 0 },
     { label: "Streak Freezes", value: user?.streakFreezeCount ?? 0 },
     { label: "Badges", value: badges },
