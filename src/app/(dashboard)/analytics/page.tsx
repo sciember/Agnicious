@@ -74,15 +74,24 @@ function GraphPanel({ data, type }: { data: Point[]; type: GraphType }) {
 
 export default function AnalyticsPage() {
   const [data, setData] = useState<Point[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [a, setA] = useState<GraphType>("line");
   const [b, setB] = useState<GraphType>("bar");
   const [fullscreen, setFullscreen] = useState<"a" | "b" | null>(null);
 
   useEffect(() => {
     fetch("/api/stats/charts")
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error("Could not load analytics");
+        return r.json();
+      })
       .then((d) => setData(d.series ?? []))
-      .catch(() => setData([]));
+      .catch(() => {
+        setData([]);
+        setError("Could not load analytics right now.");
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const heatmapDays = useMemo(() => data.slice(-84), [data]);
@@ -90,9 +99,11 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-3xl font-bold">Analytics</h1>
+      {loading ? <div className="app-card text-zinc-400">Loading analytics...</div> : null}
+      {error ? <div className="app-card border-rose-900 text-rose-300">{error}</div> : null}
       <div className="app-card">
         <h2 className="mb-3 text-lg font-semibold">Heatmap (last 12 weeks)</h2>
-        <div className="grid grid-cols-14 gap-1">
+        <div className="grid grid-cols-14 gap-1" aria-label="Habit heatmap">
           {heatmapDays.map((day) => (
             <div
               key={day.key}
@@ -105,6 +116,9 @@ export default function AnalyticsPage() {
             />
           ))}
         </div>
+        {!loading && heatmapDays.length === 0 ? (
+          <p className="mt-3 text-sm text-zinc-500">No tracking data yet. Mark habits to see heatmap activity.</p>
+        ) : null}
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="app-card">

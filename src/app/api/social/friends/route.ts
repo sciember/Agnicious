@@ -34,14 +34,33 @@ export async function POST(request: Request) {
 
   if (action === "request") {
     if (!targetEmail) return NextResponse.json({ error: "targetEmail required" }, { status: 400 });
-    const target = await prisma.user.findUnique({ where: { email: targetEmail } });
+    const normalizedEmail = targetEmail.trim().toLowerCase();
+    const target = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
     if (target.id === session.user.id) return NextResponse.json({ error: "Cannot add self" }, { status: 400 });
+
+    const reverseRequest = await prisma.friend.findUnique({
+      where: { requesterId_addresseeId: { requesterId: target.id, addresseeId: session.user.id } },
+    });
+    if (reverseRequest?.status === FriendStatus.PENDING) {
+      const accepted = await prisma.friend.update({
+        where: { id: reverseRequest.id },
+        data: { status: FriendStatus.ACCEPTED },
+      });
+      return NextResponse.json(accepted);
+    }
 
     const friendship = await prisma.friend.upsert({
       where: { requesterId_addresseeId: { requesterId: session.user.id, addresseeId: target.id } },
       create: { requesterId: session.user.id, addresseeId: target.id, status: FriendStatus.PENDING },
       update: { status: FriendStatus.PENDING },
+    });
+    await prisma.activity.create({
+      data: {
+        userId: session.user.id,
+        message: `Sent friend request to ${target.name ?? target.email}`,
+        metadata: { targetUserId: target.id },
+      },
     });
     return NextResponse.json(friendship);
   }
@@ -56,6 +75,13 @@ export async function POST(request: Request) {
     const accepted = await prisma.friend.update({
       where: { id: requestId },
       data: { status: FriendStatus.ACCEPTED },
+    });
+    await prisma.activity.create({
+      data: {
+        userId: session.user.id,
+        message: "Accepted a friend request.",
+        metadata: { requestId },
+      },
     });
     return NextResponse.json(accepted);
   }

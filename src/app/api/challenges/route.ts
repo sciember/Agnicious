@@ -12,13 +12,15 @@ export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  for (const c of defaults) {
-    await prisma.challenge.upsert({
-      where: { title: c.title },
-      create: c,
-      update: { durationDays: c.durationDays },
-    });
-  }
+  await Promise.all(
+    defaults.map((c) =>
+      prisma.challenge.upsert({
+        where: { title: c.title },
+        create: c,
+        update: { durationDays: c.durationDays },
+      }),
+    ),
+  );
 
   const challenges = await prisma.challenge.findMany({
     orderBy: { durationDays: "asc" },

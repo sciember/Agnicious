@@ -26,37 +26,64 @@ export default function HabitsPage() {
   const [form, setForm] = useState(defaultHabit);
   const [insights, setInsights] = useState<Record<string, string>>({});
   const [predictions, setPredictions] = useState<Prediction>({});
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function loadHabits() {
     const res = await fetch("/api/habits");
-    if (res.ok) setHabits(await res.json());
+    if (!res.ok) throw new Error("Failed to load habits");
+    setHabits(await res.json());
   }
 
   async function createHabit() {
-    await fetch("/api/habits", {
+    if (!form.title.trim()) {
+      setError("Habit title is required.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    const res = await fetch("/api/habits", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
+    if (!res.ok) {
+      setError("Could not create habit.");
+      setSubmitting(false);
+      return;
+    }
     setForm(defaultHabit);
     await loadHabits();
+    setSubmitting(false);
+    setMessage("Habit created successfully.");
   }
 
   async function logStatus(habitId: string, status: "DONE" | "SKIP" | "FAIL") {
+    setError(null);
     await fetch("/api/logs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ habitId, status, date: new Date().toISOString() }),
     });
     await loadHabits();
+    setMessage(`Habit marked ${status.toLowerCase()}.`);
   }
 
   async function applyFreeze(habitId: string) {
-    await fetch("/api/streak/freeze", {
+    setError(null);
+    const res = await fetch("/api/streak/freeze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ habitId }),
     });
+    if (!res.ok) {
+      const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+      setError(payload?.error ?? "Unable to apply freeze.");
+      return;
+    }
+    setMessage("Streak freeze applied.");
   }
 
   async function runFailureAnalysis(habitId: string) {
@@ -67,24 +94,32 @@ export default function HabitsPage() {
     });
     const data = await res.json();
     setInsights((p) => ({ ...p, [habitId]: data.analysis ?? "No analysis available." }));
+    setMessage("Failure analysis updated.");
   }
 
   async function fetchPrediction(habitId: string) {
     const res = await fetch(`/api/ai/prediction?habitId=${habitId}`);
     const data = await res.json();
     setPredictions((p) => ({ ...p, [habitId]: Number(data.breakProbability ?? 0) }));
+    setMessage("Break risk updated.");
   }
 
   useEffect(() => {
     fetch("/api/habits")
       .then((res) => (res.ok ? res.json() : []))
       .then((data: Habit[]) => setHabits(data))
-      .catch(() => setHabits([]));
+      .catch(() => {
+        setHabits([]);
+        setError("Could not load habits.");
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Habits</h1>
+      {message ? <div className="app-card border-emerald-900 text-emerald-300">{message}</div> : null}
+      {error ? <div className="app-card border-rose-900 text-rose-300">{error}</div> : null}
       <div className="app-card space-y-3">
         <h2 className="text-lg font-semibold">Create Habit</h2>
         <input
@@ -93,10 +128,15 @@ export default function HabitsPage() {
           value={form.title}
           onChange={(e) => setForm((s) => ({ ...s, title: e.target.value }))}
         />
-        <button onClick={createHabit} className="rounded-lg bg-indigo-500 px-4 py-2 font-medium text-white">
-          Save Habit
+        <button
+          onClick={createHabit}
+          disabled={submitting}
+          className="rounded-lg bg-indigo-500 px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {submitting ? "Saving..." : "Save Habit"}
         </button>
       </div>
+      {loading ? <div className="app-card text-zinc-400">Loading habits...</div> : null}
       <div className="grid gap-3">
         {habits.map((habit) => (
           <div key={habit.id} className="app-card">
@@ -133,6 +173,7 @@ export default function HabitsPage() {
           </div>
         ))}
       </div>
+      {!loading && habits.length === 0 ? <div className="app-card text-zinc-500">No habits yet. Create your first habit.</div> : null}
     </div>
   );
 }
