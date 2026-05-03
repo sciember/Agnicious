@@ -16,6 +16,30 @@ type NotificationItem = {
   from: { id: string; username: string | null; displayName: string; photoUrl: string | null } | null;
 };
 
+function isResolved(data: string | null): boolean {
+  if (!data) return false;
+  try {
+    const d = JSON.parse(data) as { resolved?: boolean };
+    return d.resolved === true;
+  } catch {
+    return false;
+  }
+}
+
+function skeletonCard() {
+  return (
+    <div className="animate-pulse rounded-xl border border-border p-4">
+      <div className="flex gap-3">
+        <div className="h-9 w-9 shrink-0 rounded-full bg-canvas" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="h-4 w-3/4 max-w-md rounded bg-canvas" />
+          <div className="h-3 w-24 rounded bg-canvas" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function NotificationsPage() {
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,8 +73,29 @@ export default function NotificationsPage() {
     setMarkingAll(false);
   }
 
+  async function applyResolution(notification: NotificationItem, action: "accepted" | "declined") {
+    const res = await fetch(`/api/notifications/${notification.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resolution: { action } }),
+    });
+    const payload = (await res.json().catch(() => null)) as { notification?: NotificationItem } | null;
+    if (!res.ok || !payload?.notification) {
+      return false;
+    }
+    setItems((prev) => prev.map((n) => (n.id === notification.id ? payload.notification! : n)));
+    return true;
+  }
+
   async function handleFriend(notification: NotificationItem, action: "accept" | "decline") {
-    const requestId = notification.data ? (JSON.parse(notification.data).friendRequestId as string | undefined) : undefined;
+    let requestId: string | undefined;
+    try {
+      requestId = notification.data
+        ? (JSON.parse(notification.data) as { friendRequestId?: string }).friendRequestId
+        : undefined;
+    } catch {
+      return;
+    }
     if (!requestId) return;
     setBusyId(notification.id);
     const res = await fetch("/api/social/friends", {
@@ -63,12 +108,24 @@ export default function NotificationsPage() {
       toast.error("Could not update request.");
       return;
     }
-    await markRead(notification.id);
+    const resolution = action === "accept" ? "accepted" : "declined";
+    const ok = await applyResolution(notification, resolution);
+    if (!ok) {
+      toast.error("Could not update notification.");
+      return;
+    }
     toast.success(action === "accept" ? "Friend request accepted." : "Friend request declined.");
   }
 
   async function handleChallenge(notification: NotificationItem, action: "accept" | "decline") {
-    const challengeId = notification.data ? (JSON.parse(notification.data).challengeId as string | undefined) : undefined;
+    let challengeId: string | undefined;
+    try {
+      challengeId = notification.data
+        ? (JSON.parse(notification.data) as { challengeId?: string }).challengeId
+        : undefined;
+    } catch {
+      return;
+    }
     if (!challengeId) return;
     setBusyId(notification.id);
     const res = await fetch(`/api/social/challenges/${challengeId}/respond`, {
@@ -81,12 +138,27 @@ export default function NotificationsPage() {
       toast.error("Could not update invite.");
       return;
     }
-    await markRead(notification.id);
-    toast.success(action === "accept" ? "Challenge accepted." : "Challenge declined.");
+    const resolution = action === "accept" ? "accepted" : "declined";
+    const ok = await applyResolution(notification, resolution);
+    if (!ok) {
+      toast.error("Could not update notification.");
+      return;
+    }
+    toast.success(action === "accept" ? "Joined challenge." : "Declined invite.");
   }
 
   if (loading) {
-    return <p className="text-sm text-text-muted">Loading notifications…</p>;
+    return (
+      <div className="mx-auto max-w-3xl space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="h-8 w-40 animate-pulse rounded-lg bg-canvas" />
+          <div className="h-9 w-28 animate-pulse rounded-lg bg-canvas" />
+        </div>
+        {skeletonCard()}
+        {skeletonCard()}
+        {skeletonCard()}
+      </div>
+    );
   }
 
   return (
@@ -105,65 +177,71 @@ export default function NotificationsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {items.map((n) => (
-            <div
-              key={n.id}
-              className={`rounded-xl border border-border p-4 ${n.read ? "bg-[#F9FAFB]" : "bg-white"}`}
-              onMouseEnter={() => {
-                if (!n.read) void markRead(n.id);
-              }}
-            >
-              <div className="flex items-start gap-3">
-                <UserAvatar photoUrl={n.from?.photoUrl ?? null} displayName={n.from?.displayName ?? "User"} seed={n.from?.id ?? n.id} size={36} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-text">{n.message}</p>
-                  <p className="mt-1 text-xs text-text-muted">{formatDistanceToNowStrict(new Date(n.createdAt), { addSuffix: true })}</p>
+          {items.map((n) => {
+            const resolved = isResolved(n.data);
+            const showFriendActions = n.type === "friend_request" && !resolved;
+            const showChallengeActions = n.type === "challenge_invite" && !resolved;
 
-                  {n.type === "friend_request" ? (
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        type="button"
-                        className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white"
-                        disabled={busyId === n.id}
-                        onClick={() => void handleFriend(n, "accept")}
-                      >
-                        Accept
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700"
-                        disabled={busyId === n.id}
-                        onClick={() => void handleFriend(n, "decline")}
-                      >
-                        Decline
-                      </button>
-                    </div>
-                  ) : null}
+            return (
+              <div
+                key={n.id}
+                className={`rounded-xl border border-border p-4 ${n.read ? "bg-[#F9FAFB]" : "bg-white"}`}
+                onMouseEnter={() => {
+                  if (!n.read) void markRead(n.id);
+                }}
+              >
+                <div className="flex items-start gap-3">
+                  <UserAvatar photoUrl={n.from?.photoUrl ?? null} displayName={n.from?.displayName ?? "User"} seed={n.from?.id ?? n.id} size={36} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-text">{n.message}</p>
+                    <p className="mt-1 text-xs text-text-muted">{formatDistanceToNowStrict(new Date(n.createdAt), { addSuffix: true })}</p>
 
-                  {n.type === "challenge_invite" ? (
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        type="button"
-                        className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white"
-                        disabled={busyId === n.id}
-                        onClick={() => void handleChallenge(n, "accept")}
-                      >
-                        Accept
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700"
-                        disabled={busyId === n.id}
-                        onClick={() => void handleChallenge(n, "decline")}
-                      >
-                        Decline
-                      </button>
-                    </div>
-                  ) : null}
+                    {showFriendActions ? (
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="button"
+                          className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white"
+                          disabled={busyId === n.id}
+                          onClick={() => void handleFriend(n, "accept")}
+                        >
+                          Accept
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700"
+                          disabled={busyId === n.id}
+                          onClick={() => void handleFriend(n, "decline")}
+                        >
+                          Decline
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {showChallengeActions ? (
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="button"
+                          className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white"
+                          disabled={busyId === n.id}
+                          onClick={() => void handleChallenge(n, "accept")}
+                        >
+                          Accept
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700"
+                          disabled={busyId === n.id}
+                          onClick={() => void handleChallenge(n, "decline")}
+                        >
+                          Decline
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

@@ -14,7 +14,7 @@ export async function GET() {
       streaks: { select: { currentCount: true } },
     },
     orderBy: [{ xp: "desc" }],
-    take: 10,
+    take: 100,
   });
 
   return NextResponse.json(

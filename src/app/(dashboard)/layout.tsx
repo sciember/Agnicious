@@ -5,10 +5,12 @@ import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { PageFade } from "@/components/layout/page-fade";
 import { ProfileSetupGate } from "@/components/layout/profile-setup-gate";
 import { ShellHeader } from "@/components/layout/shell-header";
+import { DashboardSwrProvider } from "@/components/providers/dashboard-swr-provider";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthModalProvider>
+      <DashboardSwrProvider>
       <ProfileSetupGate>
         <div className="flex min-h-screen bg-background">
           <AppSidebar />
@@ -22,6 +24,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <AuthModal />
         </div>
       </ProfileSetupGate>
+      </DashboardSwrProvider>
     </AuthModalProvider>
   );
 }

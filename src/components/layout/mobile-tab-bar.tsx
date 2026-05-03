@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { BarChart3, CalendarDays, ClipboardList, Home, ListChecks, Users } from "lucide-react";
 import clsx from "clsx";
@@ -13,9 +14,16 @@ const tabs = [
   { href: "/social", icon: Users, label: "Social" },
 ];
 
+const extraPrefetch = ["/ai-coach", "/notifications", "/settings"];
+
 export function MobileTabBar() {
   const pathname = usePathname();
   const router = useRouter();
+
+  useEffect(() => {
+    tabs.forEach((t) => router.prefetch(t.href));
+    extraPrefetch.forEach((href) => router.prefetch(href));
+  }, [router]);
 
   return (
     <nav

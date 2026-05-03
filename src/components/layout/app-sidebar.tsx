@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
@@ -29,6 +29,8 @@ const mainNav = [
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
 ];
+
+const prefetchRoutes = ["/", "/tasks", "/habits", "/calendar", "/analytics", "/social", "/ai-coach", "/notifications", "/settings"];
 
 function NavLink({
   href,
@@ -128,8 +130,13 @@ type MeProfile = {
 export function AppSidebar() {
   const { data: session } = useSession();
   const { openAuthModal } = useAuthModal();
+  const router = useRouter();
   const [score, setScore] = useState<number | null>(null);
   const [me, setMe] = useState<MeProfile | null>(null);
+
+  useEffect(() => {
+    prefetchRoutes.forEach((href) => router.prefetch(href));
+  }, [router]);
 
   useEffect(() => {
     if (!session?.user) {

@@ -3,11 +3,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSession } from "next-auth/react";
+import useSWR from "swr";
 import toast from "react-hot-toast";
 import clsx from "clsx";
 import { Plus, Search, Trophy, Users } from "lucide-react";
 import { useAuthModal } from "@/components/auth/auth-modal-context";
 import { UserAvatar } from "@/components/ui/user-avatar";
+
+async function jsonFetcher<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json() as Promise<T>;
+}
 
 type FriendUser = { id: string; username: string | null; displayName: string; photoUrl: string | null };
 type Friend = {
@@ -55,14 +62,29 @@ type InviteSearchUser = {
 export default function SocialPage() {
   const { data: session, status } = useSession();
   const { requireAuth } = useAuthModal();
-  const [currentUserId, setCurrentUserId] = useState("");
+  const currentUserId = session?.user?.id ?? "";
   const [targetUsername, setTargetUsername] = useState("");
-  const [targetLookup, setTargetLookup] = useState<{ found: boolean; displayName?: string } | null>(null);
-  const [friends, setFriends] = useState<Friend[]>([]);
-  const [feed, setFeed] = useState<FeedItem[]>([]);
-  const [challenges, setChallenges] = useState<SocialChallenge[]>([]);
-  const [leaders, setLeaders] = useState<Leader[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [addTypeaheadResults, setAddTypeaheadResults] = useState<InviteSearchUser[]>([]);
+  const [addTypeaheadLoading, setAddTypeaheadLoading] = useState(false);
+  const [addTypeaheadOpen, setAddTypeaheadOpen] = useState(false);
+
+  const { data: friends, mutate: mutateFriends } = useSWR<Friend[]>(
+    session?.user ? "/api/social/friends" : null,
+    jsonFetcher,
+  );
+  const { data: feed, mutate: mutateFeed } = useSWR<FeedItem[]>(session?.user ? "/api/social/feed" : null, jsonFetcher);
+  const { data: challenges, mutate: mutateChallenges } = useSWR<SocialChallenge[]>(
+    session?.user ? "/api/social/challenges" : null,
+    jsonFetcher,
+  );
+  const { data: leaders } = useSWR<Leader[]>("/api/leaderboard", jsonFetcher);
+
+  const refreshSocial = useCallback(async () => {
+    await Promise.all([mutateFriends(), mutateFeed(), mutateChallenges()]);
+  }, [mutateFriends, mutateFeed, mutateChallenges]);
+
+  const loading =
+    status === "loading" || (session?.user && (friends === undefined || feed === undefined || challenges === undefined));
   const [busy, setBusy] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState<string | null>(null);
@@ -78,65 +100,41 @@ export default function SocialPage() {
   const [inviteResults, setInviteResults] = useState<InviteSearchUser[]>([]);
   const [inviteLoading, setInviteLoading] = useState(false);
 
-  const loadAuthData = useCallback(async () => {
-    const uid = session?.user?.id;
-    if (!uid) return;
-    const [f, a, c] = await Promise.all([
-      fetch("/api/social/friends").then((r) => (r.ok ? r.json() : [])),
-      fetch("/api/social/feed").then((r) => (r.ok ? r.json() : [])),
-      fetch("/api/social/challenges").then((r) => (r.ok ? r.json() : [])),
-    ]);
-    setFriends(Array.isArray(f) ? f : []);
-    setFeed(Array.isArray(a) ? a : []);
-    setChallenges(Array.isArray(c) ? c : []);
-    setCurrentUserId(uid);
-  }, [session?.user?.id]);
-
-  const loadLeaderboard = useCallback(async () => {
-    const lb = await fetch("/api/leaderboard").then((r) => (r.ok ? r.json() : []));
-    setLeaders(Array.isArray(lb) ? lb : []);
-  }, []);
-
-  useEffect(() => {
-    if (status === "loading") return;
-    void loadLeaderboard();
-    if (!session?.user) {
-      setFriends([]);
-      setFeed([]);
-      setChallenges([]);
-      setCurrentUserId("");
-      setLoading(false);
-      return;
-    }
-    void loadAuthData()
-      .catch(() => toast.error("Could not load social data."))
-      .finally(() => setLoading(false));
-  }, [session?.user, status, loadAuthData, loadLeaderboard]);
-
   const acceptedFriends = useMemo(() => {
-    if (!currentUserId) return [];
+    if (!currentUserId || !friends) return [];
     return friends
       .filter((f) => f.status === "ACCEPTED")
       .map((f) => (f.requesterId === currentUserId ? f.addressee : f.requester));
   }, [friends, currentUserId]);
 
   useEffect(() => {
-    const raw = targetUsername.trim();
-    if (!raw) {
-      setTargetLookup(null);
+    const raw = targetUsername.trim().replace(/^@+/, "");
+    if (!session?.user || raw.length < 1) {
+      setAddTypeaheadResults([]);
+      setAddTypeaheadLoading(false);
       return;
     }
     let cancel = false;
+    setAddTypeaheadLoading(true);
     const t = setTimeout(async () => {
-      const r = await fetch(`/api/user/lookup?u=${encodeURIComponent(raw)}`);
-      const d = (await r.json().catch(() => null)) as { found?: boolean; displayName?: string } | null;
-      if (!cancel) setTargetLookup(d?.found ? { found: true, displayName: d.displayName } : { found: false });
+      const r = await fetch(`/api/user/typeahead?q=${encodeURIComponent(raw)}`);
+      const d = (await r.json().catch(() => [])) as InviteSearchUser[];
+      if (!cancel) {
+        setAddTypeaheadResults(Array.isArray(d) ? d : []);
+        setAddTypeaheadLoading(false);
+      }
     }, 300);
     return () => {
       cancel = true;
       clearTimeout(t);
     };
-  }, [targetUsername]);
+  }, [targetUsername, session?.user]);
+
+  function pickAddFriendTypeahead(u: InviteSearchUser) {
+    setTargetUsername(u.username ? `@${u.username}` : u.displayName);
+    setAddTypeaheadResults([]);
+    setAddTypeaheadOpen(false);
+  }
 
   async function sendRequest() {
     if (!targetUsername.trim()) {
@@ -156,8 +154,8 @@ export default function SocialPage() {
       return;
     }
     setTargetUsername("");
-    setTargetLookup(null);
-    await loadAuthData();
+    setAddTypeaheadResults([]);
+    await refreshSocial();
     setBusy(false);
     toast.success("Friend request sent.");
   }
@@ -174,7 +172,7 @@ export default function SocialPage() {
       setBusy(false);
       return;
     }
-    await loadAuthData();
+    await refreshSocial();
     setBusy(false);
     toast.success("Friend request accepted.");
   }
@@ -208,7 +206,7 @@ export default function SocialPage() {
     setCreateInviteIds([]);
     setCreateSearch("");
     setCreateResults([]);
-    await loadAuthData();
+    await refreshSocial();
     setBusy(false);
     toast.success("Challenge created.");
   }
@@ -222,7 +220,7 @@ export default function SocialPage() {
       toast.error("Could not delete.");
       return;
     }
-    await loadAuthData();
+    await refreshSocial();
     toast.success("Challenge deleted.");
   }
 
@@ -238,7 +236,7 @@ export default function SocialPage() {
       toast.error("Could not update invite.");
       return;
     }
-    await loadAuthData();
+    await refreshSocial();
     toast.success(action === "accept" ? "Joined challenge." : "Declined.");
   }
 
@@ -262,7 +260,7 @@ export default function SocialPage() {
     setInviteOpen(null);
     setInviteModalIds([]);
     setInviteSearch("");
-    await loadAuthData();
+    await refreshSocial();
     toast.success("Invites sent.");
   }
 
@@ -350,30 +348,74 @@ export default function SocialPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <motion.section className="app-card space-y-4" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-          <h2 className="text-lg font-semibold text-text">Add friend</h2>
-          <p className="text-sm text-text-muted">Send a request by @username.</p>
-          <input
-            value={targetUsername}
-            onChange={(e) => setTargetUsername(e.target.value)}
-            placeholder="@username"
-            className="input-field"
-          />
-          {targetUsername.trim() ? (
-            <p className={`text-xs ${targetLookup?.found ? "text-green-600" : "text-red-600"}`}>
-              {targetLookup?.found ? `✓ Found: ${targetLookup.displayName}` : "✗ User not found"}
-            </p>
-          ) : null}
-          <button type="button" className="btn-primary w-full sm:w-auto" onClick={requireAuth(() => void sendRequest())} disabled={busy}>
+        <motion.section
+          className="app-card flex max-h-[min(440px,72vh)] flex-col gap-3 overflow-hidden"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="shrink-0 space-y-1">
+            <h2 className="text-lg font-semibold text-text">Add friend</h2>
+            <p className="text-sm text-text-muted">Search by @username or name, then send a request.</p>
+          </div>
+          <div className="relative shrink-0">
+            <input
+              value={targetUsername}
+              onChange={(e) => {
+                setTargetUsername(e.target.value);
+                setAddTypeaheadOpen(true);
+              }}
+              onFocus={() => setAddTypeaheadOpen(true)}
+              onBlur={() => setTimeout(() => setAddTypeaheadOpen(false), 180)}
+              placeholder="@username"
+              className="input-field"
+              autoComplete="off"
+              aria-autocomplete="list"
+              aria-expanded={addTypeaheadOpen && (addTypeaheadLoading || addTypeaheadResults.length > 0)}
+            />
+            {addTypeaheadOpen && session?.user && targetUsername.trim().replace(/^@+/, "").length >= 1 ? (
+              <ul
+                className="absolute z-30 mt-1 max-h-52 w-full overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-lg"
+                role="listbox"
+              >
+                {addTypeaheadLoading ? (
+                  <li className="px-3 py-2 text-xs text-text-muted">Searching…</li>
+                ) : addTypeaheadResults.length === 0 ? (
+                  <li className="px-3 py-2 text-xs text-text-muted">No users found</li>
+                ) : (
+                  addTypeaheadResults.map((u) => (
+                    <li key={u.id} role="option">
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-canvas"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => pickAddFriendTypeahead(u)}
+                      >
+                        <UserAvatar photoUrl={u.photoUrl} displayName={u.displayName} seed={u.id} size={32} />
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-text">{u.displayName}</p>
+                          <p className="truncate text-xs text-text-muted">{u.username ? `@${u.username}` : "No username"}</p>
+                        </div>
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            ) : null}
+          </div>
+          <button type="button" className="btn-primary w-full shrink-0 sm:w-auto" onClick={requireAuth(() => void sendRequest())} disabled={busy}>
             {busy ? "Sending…" : "Send request"}
           </button>
-          <div className="space-y-2 border-t border-border pt-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Requests</p>
-            {session?.user && friends.length === 0 ? (
-              <p className="text-sm text-text-muted">No friend activity yet.</p>
-            ) : null}
-            {session?.user
-              ? friends.map((friend) => (
+          <div className="flex min-h-0 flex-1 flex-col border-t border-border pt-3">
+            <p className="shrink-0 text-xs font-semibold uppercase tracking-wide text-text-muted">Requests</p>
+            <div className="mt-2 max-h-[200px] min-h-[120px] flex-1 space-y-2 overflow-y-auto pr-1">
+              {!session?.user ? (
+                <p className="text-sm text-text-muted">Sign in to see requests.</p>
+              ) : loading ? (
+                <p className="text-sm text-text-muted">Loading…</p>
+              ) : friends !== undefined && friends.length === 0 ? (
+                <p className="text-sm text-text-muted">No friend activity yet.</p>
+              ) : (
+                (friends ?? []).map((friend) => (
                   <div
                     key={friend.id}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-canvas px-3 py-2 text-sm"
@@ -394,21 +436,26 @@ export default function SocialPage() {
                     ) : null}
                   </div>
                 ))
-              : null}
+              )}
+            </div>
           </div>
         </motion.section>
 
-        <motion.section className="app-card" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-          <h2 className="text-lg font-semibold text-text">Your activity</h2>
-          <div className="mt-4 max-h-[420px] space-y-3 overflow-y-auto pr-1">
+        <motion.section className="app-card flex max-h-[min(380px,55vh)] flex-col overflow-hidden" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+          <h2 className="shrink-0 text-lg font-semibold text-text">Your activity</h2>
+          <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
             {!session?.user ? (
               <p className="text-sm text-text-muted">Sign in to see your activity.</p>
             ) : loading ? (
-              <p className="text-sm text-text-muted">Loading…</p>
-            ) : feed.length === 0 ? (
+              <div className="space-y-2">
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} className="h-20 animate-pulse rounded-xl bg-canvas" />
+                ))}
+              </div>
+            ) : (feed ?? []).length === 0 ? (
               <p className="text-sm text-text-muted">No activity yet.</p>
             ) : (
-              feed.map((item) => (
+              (feed ?? []).map((item) => (
                 <div key={item.id} className="flex gap-3 rounded-xl border border-border bg-canvas p-3">
                   <UserAvatar photoUrl={null} displayName={item.user.displayName} seed={item.user.id} size={40} />
                   <div className="min-w-0 flex-1">
@@ -444,15 +491,20 @@ export default function SocialPage() {
         {!session?.user ? (
           <p className="text-sm text-text-muted">Sign in to create or join challenges.</p>
         ) : loading ? (
-          <p className="text-sm text-text-muted">Loading challenges…</p>
-        ) : challenges.length === 0 ? (
+          <div className="grid gap-4 md:grid-cols-2">
+            {[0, 1].map((i) => (
+              <div key={i} className="app-card h-48 animate-pulse bg-canvas" />
+            ))}
+          </div>
+        ) : (challenges ?? []).length === 0 ? (
           <div className="rounded-[14px] border border-dashed border-border bg-canvas px-4 py-12 text-center">
             <Users className="mx-auto mb-3 h-10 w-10 text-text-muted" />
             <p className="text-sm text-text-muted">No challenges yet — create one and invite friends to compete!</p>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {challenges.map((ch) => {
+          <div className="max-h-[min(560px,62vh)] overflow-y-auto pr-1 md:pr-2">
+            <div className="grid gap-4 md:grid-cols-2">
+              {(challenges ?? []).map((ch) => {
               const accepted = ch.participants.filter((p) => p.status === "ACCEPTED");
               const showAvatars = accepted.slice(0, 3);
               const extra = Math.max(0, accepted.length - 3);
@@ -521,11 +573,12 @@ export default function SocialPage() {
                 </motion.div>
               );
             })}
+            </div>
           </div>
         )}
       </section>
 
-      <section className="app-card overflow-hidden p-0">
+      <section className="app-card flex max-h-[min(480px,55vh)] flex-col overflow-hidden p-0">
         <div className="border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
             <Trophy className="h-4 w-4 text-amber-500" />
@@ -533,42 +586,52 @@ export default function SocialPage() {
           </div>
           <p className="text-xs text-text-muted">Ranked by XP</p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[520px] border-collapse text-left text-sm">
-            <thead className="bg-canvas text-xs uppercase tracking-wide text-text-muted">
-              <tr>
-                <th className="px-4 py-3 font-semibold">Rank</th>
-                <th className="px-4 py-3 font-semibold">Player</th>
-                <th className="px-4 py-3 font-semibold">Streak</th>
-                <th className="px-4 py-3 font-semibold">XP</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leaders.map((row, idx) => {
-                const rank = idx + 1;
-                const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
-                const isYou = row.id === currentUserId;
-                return (
-                  <tr key={row.id} className={clsx("border-t border-border", isYou ? "bg-primary-soft/60" : "bg-transparent")}>
-                    <td className="px-4 py-3 font-mono text-text">
-                      <span className="mr-2">{medal}</span>
-                      {rank}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <UserAvatar photoUrl={row.photoUrl} displayName={row.displayName} seed={row.id} size={36} className="shrink-0" />
-                        <span className="min-w-0 truncate whitespace-nowrap font-medium text-text">{row.displayName}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-text">{row.streakCount}</td>
-                    <td className="px-4 py-3 font-mono text-text">{row.xp}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
+          {leaders === undefined ? (
+            <div className="space-y-2 p-4">
+              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+                <div key={i} className="h-11 animate-pulse rounded-lg bg-canvas" />
+              ))}
+            </div>
+          ) : (
+            <table className="w-full min-w-[520px] border-collapse text-left text-sm">
+              <thead className="sticky top-0 z-10 bg-canvas text-xs uppercase tracking-wide text-text-muted">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">Rank</th>
+                  <th className="px-4 py-3 font-semibold">Player</th>
+                  <th className="px-4 py-3 font-semibold">Streak</th>
+                  <th className="px-4 py-3 font-semibold">XP</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(leaders ?? []).map((row, idx) => {
+                  const rank = idx + 1;
+                  const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
+                  const isYou = row.id === currentUserId;
+                  return (
+                    <tr key={row.id} className={clsx("border-t border-border", isYou ? "bg-primary-soft/60" : "bg-transparent")}>
+                      <td className="px-4 py-3 font-mono text-text">
+                        <span className="mr-2">{medal}</span>
+                        {rank}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <UserAvatar photoUrl={row.photoUrl} displayName={row.displayName} seed={row.id} size={36} className="shrink-0" />
+                          <span className="min-w-0 truncate whitespace-nowrap font-medium text-text">{row.displayName}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-text">{row.streakCount}</td>
+                      <td className="px-4 py-3 font-mono text-text">{row.xp}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
-        {leaders.length === 0 ? <p className="px-4 py-6 text-sm text-text-muted">No leaderboard data.</p> : null}
+        {leaders !== undefined && leaders.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-text-muted">No leaderboard data.</p>
+        ) : null}
       </section>
 
       <AnimatePresence>
