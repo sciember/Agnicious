@@ -86,7 +86,7 @@ export function AuthModal() {
                 type="button"
                 className="flex w-full cursor-pointer items-center justify-center gap-3 rounded-xl border border-[#D1D5DB] bg-white px-4 py-3 text-sm font-semibold text-[#374151] shadow-sm transition hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={busy}
-                onClick={() => void signIn("google", { callbackUrl: "/" })}
+                onClick={() => void signIn("google", { callbackUrl: "/dashboard" })}
               >
                 <GoogleMark />
                 Continue with Google
