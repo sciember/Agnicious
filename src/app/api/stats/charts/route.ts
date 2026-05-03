@@ -4,11 +4,21 @@ import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
+const DEFAULT_DAYS = 90;
+const MAX_DAYS = 400;
+
+export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const startDate = subDays(new Date(), 89);
+  const { searchParams } = new URL(request.url);
+  const parsed = Number(searchParams.get("days"));
+  const numDays = Math.min(
+    MAX_DAYS,
+    Math.max(1, Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : DEFAULT_DAYS),
+  );
+
+  const startDate = subDays(new Date(), numDays - 1);
   const logs = await prisma.habitLog.findMany({
     where: { userId: session.user.id, date: { gte: startDate } },
     select: { date: true, status: true },
@@ -25,8 +35,8 @@ export async function GET() {
     map.set(key, val);
   });
 
-  const series = Array.from({ length: 90 }, (_, i) => {
-    const d = subDays(new Date(), 89 - i);
+  const series = Array.from({ length: numDays }, (_, i) => {
+    const d = subDays(new Date(), numDays - 1 - i);
     const key = format(d, "yyyy-MM-dd");
     const val = map.get(key) ?? { done: 0, skip: 0, fail: 0 };
     return {
@@ -44,5 +54,5 @@ export async function GET() {
     };
   });
 
-  return NextResponse.json({ series });
+  return NextResponse.json({ series, days: numDays });
 }

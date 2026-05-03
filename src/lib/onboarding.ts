@@ -55,3 +55,19 @@ export function encodeStoredGoal(goal: OnboardingGoalKey, customLabel?: string):
   }
   return goal;
 }
+
+/** Decode `User.onboardingGoal` DB string into goal key + optional custom label. */
+export function parseStoredOnboardingGoal(
+  stored: string | null | undefined,
+): { goal: OnboardingGoalKey; customLabel?: string } {
+  if (!stored?.trim()) return { goal: "HEALTH" };
+  const t = stored.trim();
+  if (t.startsWith("CUSTOM:")) {
+    return { goal: "CUSTOM", customLabel: t.slice(7).trim() || undefined };
+  }
+  const upper = t.toUpperCase();
+  if (upper === "HEALTH" || upper === "PRODUCTIVITY" || upper === "LEARNING" || upper === "MINDFULNESS") {
+    return { goal: upper as OnboardingGoalKey };
+  }
+  return { goal: "HEALTH" };
+}

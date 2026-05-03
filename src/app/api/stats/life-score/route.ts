@@ -1,4 +1,5 @@
 import { LifeArea } from "@prisma/client";
+import { endOfDay, startOfDay, subDays } from "date-fns";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
@@ -28,10 +29,31 @@ export async function GET() {
   const career = totalByArea.CAREER ? Math.min(100, Math.round((scores.CAREER / (totalByArea.CAREER * 30)) * 100)) : 0;
   const mind = totalByArea.MIND ? Math.min(100, Math.round((scores.MIND / (totalByArea.MIND * 30)) * 100)) : 0;
 
+  const now = new Date();
+  const moodWindowStart = startOfDay(subDays(now, 6));
+  const moodWindowEnd = endOfDay(now);
+  const moodRows = await prisma.moodLog.findMany({
+    where: {
+      userId: session.user.id,
+      loggedAt: { gte: moodWindowStart, lte: moodWindowEnd },
+    },
+    select: { moodScore: true },
+  });
+  const wellbeing =
+    moodRows.length > 0
+      ? Math.min(100, Math.round((moodRows.reduce((s, m) => s + m.moodScore, 0) / moodRows.length) * 20))
+      : null;
+
+  const overall = Math.round((health + career + mind) / 3);
+  const overallWithWellbeing =
+    wellbeing != null ? Math.round((health + career + mind + wellbeing) / 4) : null;
+
   return NextResponse.json({
     health,
     career,
     mind,
-    overall: Math.round((health + career + mind) / 3),
+    wellbeing,
+    overall,
+    overallWithWellbeing,
   });
 }

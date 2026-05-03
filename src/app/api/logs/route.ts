@@ -2,31 +2,11 @@ import { HabitStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
+import { refreshUserLevelFromXp } from "@/lib/gamification/award-badge";
+import { evaluateBadgesAfterHabitDone } from "@/lib/gamification/evaluate-badges";
+import { syncUserDailyChallenges } from "@/lib/gamification/sync-daily-challenges";
 import { prisma } from "@/lib/prisma";
 import { habitLogSchema } from "@/lib/validations/habit";
-
-async function awardAchievement(userId: string, code: string, title: string, description: string, xpReward = 0) {
-  const achievement = await prisma.achievement.upsert({
-    where: { code },
-    create: { code, title, description, xpReward },
-    update: {},
-  });
-
-  const alreadyAwarded = await prisma.userAchievement.findUnique({
-    where: { userId_achievementId: { userId, achievementId: achievement.id } },
-  });
-  if (alreadyAwarded) return;
-
-  await prisma.userAchievement.create({
-    data: { userId, achievementId: achievement.id },
-  });
-  if (xpReward > 0) {
-    await prisma.user.update({
-      where: { id: userId },
-      data: { xp: { increment: xpReward } },
-    });
-  }
-}
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
@@ -104,49 +84,38 @@ export async function POST(request: Request) {
     },
   });
 
+  let newBadges: { code: string; title: string; description: string }[] = [];
+  let summary:
+    | { newBadges: typeof newBadges; xp: number; coinsEarned: number; level: number }
+    | undefined;
+
   if (parsed.data.status === "DONE") {
-    const updatedUser = await prisma.user.update({
-      where: { id: session.user.id },
-      data: { xp: { increment: 10 } },
-      select: { xp: true },
-    });
+    const completedAt = new Date();
     await prisma.user.update({
       where: { id: session.user.id },
-      data: { level: Math.max(1, Math.floor(updatedUser.xp / 100) + 1) },
+      data: {
+        xp: { increment: 10 },
+        coins: { increment: 5 },
+      },
     });
 
-    // 7-day and 30-day streak badge unlocks.
-    if (doneCount >= 7) {
-      await awardAchievement(
-        session.user.id,
-        "STREAK_7",
-        "7-Day Streak",
-        "Completed a habit for 7 successful entries.",
-        25,
-      );
-    }
-    if (doneCount >= 30) {
-      await awardAchievement(
-        session.user.id,
-        "STREAK_30",
-        "30-Day Streak",
-        "Maintained a strong 30 entry streak.",
-        100,
-      );
+    if (doneCount > 0 && doneCount % 7 === 0) {
+      await prisma.user.update({
+        where: { id: session.user.id },
+        data: { streakFreezeCount: { increment: 1 } },
+      });
     }
 
-    // Comeback badge after recovering from a break.
-    if ((previousStreak?.currentCount ?? 0) === 0) {
-      await awardAchievement(
-        session.user.id,
-        "COMEBACK",
-        "Comeback",
-        "Returned to the habit after a break.",
-        20,
-      );
-    }
+    await refreshUserLevelFromXp(session.user.id);
 
-    // Keep social feed fresh.
+    newBadges = await evaluateBadgesAfterHabitDone(session.user.id, {
+      completedAt,
+      doneCountForHabit: doneCount,
+      prevStreakCurrentCount: previousStreak?.currentCount ?? 0,
+    });
+
+    await syncUserDailyChallenges(session.user.id).catch(() => undefined);
+
     const habit = await prisma.habit.findUnique({
       where: { id: parsed.data.habitId },
       select: { title: true },
@@ -158,9 +127,19 @@ export async function POST(request: Request) {
         metadata: { habitId: parsed.data.habitId, status: parsed.data.status },
       },
     });
+
+    const u = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { xp: true, level: true },
+    });
+    summary = {
+      newBadges,
+      xp: u?.xp ?? 0,
+      coinsEarned: 5,
+      level: u?.level ?? 1,
+    };
   }
 
-  // Update active challenges.
   const activeChallenges = await prisma.userChallenge.findMany({
     where: { userId: session.user.id, completedAt: null },
     select: {
@@ -187,5 +166,11 @@ export async function POST(request: Request) {
     });
   }
 
-  return NextResponse.json(log, { status: 201 });
+  return NextResponse.json(
+    {
+      ...log,
+      gamification: summary,
+    },
+    { status: 201 },
+  );
 }

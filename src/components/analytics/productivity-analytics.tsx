@@ -114,11 +114,23 @@ function insightCards(overview: Overview | null, report: Report | null, range: R
       text: `You have **${overview.tasks.overdue} overdue task(s)** — consider a 15-minute clear-out block.`,
     });
   }
+  if (overview.mood.totalLogs90d > 0 && overview.mood.avg7d != null && overview.mood.avg7d <= 2.5) {
+    items.push({
+      icon: "💙",
+      text: `Your 7-day mood average is **${overview.mood.avg7d}/5**. Short resets (walk, water, one easy win on the dashboard) often help.`,
+    });
+  }
+  if (overview.mood.logStreakDays >= 7) {
+    items.push({
+      icon: "🌤️",
+      text: `**${overview.mood.logStreakDays}-day** mood check-in streak — nice consistency.`,
+    });
+  }
   items.push({
     icon: "📊",
     text: `Productivity score is **${overview.productivity.score}/100** (${range}). ${overview.productivity.trend}`,
   });
-  return items.slice(0, 4);
+  return items.slice(0, 6);
 }
 
 export function ProductivityAnalytics() {
@@ -248,6 +260,32 @@ export function ProductivityAnalytics() {
     return buildDualLine(report.habitDailyDone, report.taskCompletedByDay, Math.min(days, 30));
   }, [report, days]);
 
+  const moodLine = useMemo(() => {
+    if (!overview?.mood?.last14Days?.length) return [];
+    return overview.mood.last14Days.map((d) => ({
+      label: d.date.slice(5),
+      score: d.avgScore,
+    }));
+  }, [overview]);
+
+  /** Phase 3: mood vs habit throughput on the same calendar days (last 14). */
+  const moodHabitCorrelation = useMemo(() => {
+    if (!overview?.mood?.last14Days?.length || !report?.habitDailyDone) return null;
+    let sum = 0;
+    let n = 0;
+    for (const row of overview.mood.last14Days) {
+      if (row.avgScore == null) continue;
+      const done = report.habitDailyDone[row.date];
+      if (done != null && done >= 3) {
+        sum += row.avgScore;
+        n += 1;
+      }
+    }
+    if (n === 0) return null;
+    const avg = Math.round((sum / n) * 10) / 10;
+    return `On days you completed 3+ habits (and logged mood), your mood averaged ${avg}/5 across ${n} day${n === 1 ? "" : "s"} in the last two weeks.`;
+  }, [overview, report]);
+
   const insights = useMemo(() => insightCards(overview, report, range), [overview, report, range]);
 
   const focusHrs = Math.round((overview?.pomodoro.totalMinutesToday ?? 0) / 60);
@@ -368,6 +406,77 @@ export function ProductivityAnalytics() {
             </ChartCard>
           </div>
         </div>
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-lg font-semibold text-text">Mood</h2>
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="app-card space-y-3 lg:col-span-1">
+            <p className="text-sm font-medium text-text-muted">Check-ins</p>
+            {!loading && overview?.mood ? (
+              <>
+                <div>
+                  <p className="text-xs text-text-muted">Today</p>
+                  <p className="mt-0.5 text-lg font-semibold text-text">
+                    {overview.mood.loggedToday && overview.mood.todayScore != null
+                      ? `${overview.mood.todayScore}/5`
+                      : "Not logged yet"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-muted">7-day average</p>
+                  <p className="mt-0.5 font-mono text-xl font-semibold text-text">
+                    {overview.mood.avg7d != null ? `${overview.mood.avg7d}/5` : "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-muted">Daily logging streak</p>
+                  <p className="mt-0.5 font-mono text-xl font-semibold text-text">
+                    {overview.mood.logStreakDays}d
+                  </p>
+                </div>
+                <p className="text-xs text-text-muted">
+                  Log from the <a href="/dashboard" className="font-medium text-primary hover:underline">dashboard</a>{" "}
+                  mood check-in.
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-text-muted">Loading…</p>
+            )}
+          </div>
+          <ChartCard title="14-day trend (1 = low, 5 = great)" className="lg:col-span-2">
+            <div className="h-56 min-h-[224px] w-full min-w-0">
+              {moodLine.some((x) => x.score != null) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={moodLine}>
+                    <CartesianGrid stroke={CHART.grid} vertical={false} />
+                    <XAxis dataKey="label" tick={{ fill: CHART.tick, fontSize: 10 }} />
+                    <YAxis domain={[1, 5]} tick={{ fill: CHART.tick, fontSize: 10 }} allowDecimals />
+                    <Tooltip contentStyle={tooltipStyle} />
+                    <Line
+                      type="monotone"
+                      dataKey="score"
+                      stroke={CHART.amber}
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      connectNulls
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="flex h-full items-center justify-center text-sm text-text-muted">
+                  No mood logs yet — check in from the dashboard to see your trend here.
+                </p>
+              )}
+            </div>
+          </ChartCard>
+        </div>
+        {moodHabitCorrelation ? (
+          <p className="mt-4 rounded-xl border border-border bg-canvas px-4 py-3 text-sm text-text">
+            <span className="font-semibold text-primary">Mood × habits · </span>
+            {moodHabitCorrelation}
+          </p>
+        ) : null}
       </section>
 
       <section>

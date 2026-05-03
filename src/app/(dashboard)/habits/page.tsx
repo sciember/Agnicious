@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { format, startOfDay, subDays } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
@@ -11,15 +11,22 @@ import {
   Pencil,
   Trash2,
   BarChart3,
+  RefreshCw,
   Snowflake,
+  Sparkles,
 } from "lucide-react";
 import clsx from "clsx";
 import { useAuthModal } from "@/components/auth/auth-modal-context";
+import { BadgeEarnedModal, type BadgeEarned } from "@/components/gamification/badge-earned-modal";
+import { LevelUpModal } from "@/components/gamification/level-up-modal";
+import type { XpFloatItem } from "@/components/gamification/xp-float-label";
+import { XpFloatLayer } from "@/components/gamification/xp-float-label";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SkeletonCard } from "@/components/ui/skeleton-card";
 import { fireHabitConfetti } from "@/lib/confetti-burst";
 import { parseHabitUiMeta, serializeHabitUiMeta } from "@/lib/habit-ui-meta";
+import type { OnboardingGoalKey, SuggestedHabit } from "@/lib/onboarding";
 
 type Habit = {
   id: string;
@@ -54,6 +61,16 @@ export default function HabitsPage() {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState({ title: "", lifeArea: "HEALTH" as Habit["lifeArea"] });
+  const [badgeEarned, setBadgeEarned] = useState<BadgeEarned | null>(null);
+  const [xpFloats, setXpFloats] = useState<XpFloatItem[]>([]);
+  const [levelUpOpen, setLevelUpOpen] = useState(false);
+  const [levelUpLevel, setLevelUpLevel] = useState(1);
+  const prevLevelRef = useRef<number | null>(null);
+  const [aiSuggestions, setAiSuggestions] = useState<SuggestedHabit[]>([]);
+  const [aiSugLoading, setAiSugLoading] = useState(false);
+  const [aiSugGoal, setAiSugGoal] = useState<OnboardingGoalKey | null>(null);
+  const [aiSugCustomLabel, setAiSugCustomLabel] = useState<string | null>(null);
+  const [addingSuggestionKey, setAddingSuggestionKey] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!session?.user?.id) {
@@ -73,9 +90,62 @@ export default function HabitsPage() {
     setLoading(false);
   }, [session?.user?.id]);
 
+  function pushXpFloat(clientX: number, clientY: number) {
+    const id = crypto.randomUUID();
+    setXpFloats((f) => [...f, { id, amount: 10, x: clientX, y: clientY }]);
+    window.setTimeout(() => {
+      setXpFloats((f) => f.filter((item) => item.id !== id));
+    }, 1200);
+  }
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  const fetchAiSuggestions = useCallback(async () => {
+    if (!session?.user?.id) {
+      setAiSuggestions([]);
+      setAiSugGoal(null);
+      setAiSugCustomLabel(null);
+      return;
+    }
+    setAiSugLoading(true);
+    try {
+      const res = await fetch("/api/ai/habit-suggestions", { method: "POST" });
+      const data = (await res.json().catch(() => null)) as {
+        suggestions?: SuggestedHabit[];
+        goal?: OnboardingGoalKey;
+        customLabel?: string | null;
+      } | null;
+      if (res.ok && Array.isArray(data?.suggestions)) {
+        setAiSuggestions(data.suggestions);
+        setAiSugGoal(data.goal ?? null);
+        setAiSugCustomLabel(data.customLabel ?? null);
+      } else {
+        setAiSuggestions([]);
+        setAiSugGoal(null);
+        setAiSugCustomLabel(null);
+      }
+    } finally {
+      setAiSugLoading(false);
+    }
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    void fetchAiSuggestions();
+  }, [fetchAiSuggestions]);
+
+  useEffect(() => {
+    if (!session?.user?.id) {
+      prevLevelRef.current = null;
+      return;
+    }
+    void fetch("/api/stats/overview")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((o: { level?: number } | null) => {
+        if (typeof o?.level === "number") prevLevelRef.current = o.level;
+      });
+  }, [session?.user?.id]);
 
   const logsByDay = useMemo(() => {
     const m = new Map<string, Set<string>>();
@@ -186,7 +256,13 @@ export default function HabitsPage() {
       toast.error("Could not log habit.");
       return;
     }
-    const data = (await res.json()) as { habitId: string; date: string; status: string };
+    const payload = (await res.json()) as {
+      id?: string;
+      habitId: string;
+      date: string;
+      status: string;
+      gamification?: { newBadges?: BadgeEarned[]; level?: number };
+    };
     setLogs((l) => [
       ...l.filter(
         (x) =>
@@ -196,10 +272,70 @@ export default function HabitsPage() {
             format(new Date(x.date), "yyyy-MM-dd") === todayKey
           ),
       ),
-      { habitId: data.habitId, date: data.date, status: data.status },
+      { habitId: payload.habitId, date: payload.date, status: payload.status },
     ]);
+    const nb = payload.gamification?.newBadges;
+    if (nb?.length) {
+      setBadgeEarned(nb[0]);
+      for (let i = 1; i < nb.length; i++) {
+        toast.success(`Badge: ${nb[i].title}`);
+      }
+    }
+    const gl = payload.gamification?.level;
+    if (typeof gl === "number") {
+      if (prevLevelRef.current !== null && gl > prevLevelRef.current) {
+        setLevelUpLevel(gl);
+        setLevelUpOpen(true);
+      }
+      prevLevelRef.current = gl;
+    }
     fireHabitConfetti(sourceEl);
+    if (sourceEl) {
+      const r = sourceEl.getBoundingClientRect();
+      pushXpFloat(r.left + r.width / 2, r.top);
+    }
     toast.success("Habit logged! 🔥 Keep it up");
+    void load();
+  }
+
+  async function addFromSuggestion(s: SuggestedHabit) {
+    const key = `${s.title}::${s.emoji}`;
+    setAddingSuggestionKey(key);
+    const description = serializeHabitUiMeta({ emoji: s.emoji, accent: s.accent }) ?? null;
+    const body = {
+      title: s.title.trim(),
+      ...(description ? { description } : {}),
+      type: "DAILY" as const,
+      repeatPattern: "EVERYDAY" as const,
+      customWeekdays: [] as number[],
+      lifeArea: s.lifeArea,
+    };
+    const tempId = crypto.randomUUID();
+    const optimistic: Habit = {
+      id: tempId,
+      title: body.title,
+      description,
+      type: "DAILY",
+      repeatPattern: "EVERYDAY",
+      lifeArea: body.lifeArea,
+    };
+    const prevHabits = habits;
+    setHabits((h) => [optimistic, ...h]);
+    const res = await fetch("/api/habits", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setAddingSuggestionKey(null);
+    if (!res.ok) {
+      setHabits(prevHabits);
+      toast.error("Could not add habit.");
+      return;
+    }
+    const server = await res.json();
+    setHabits((h) => h.map((x) => (x.id === tempId ? habitFromApi(server) : x)));
+    setAiSuggestions((list) => list.filter((x) => x.title !== s.title));
+    toast.success("Habit added");
     void load();
   }
 
@@ -271,6 +407,7 @@ export default function HabitsPage() {
   const openNewForm = requireAuth(() => setFormOpen(true));
 
   return (
+    <>
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -286,6 +423,73 @@ export default function HabitsPage() {
           + New Habit
         </motion.button>
       </div>
+
+      {session?.user ? (
+        <section className="app-card border border-border/80">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-start gap-2">
+              <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden />
+              <div>
+                <h2 className="text-sm font-semibold text-text">AI suggestions</h2>
+                <p className="mt-0.5 text-[11px] text-text-muted">
+                  {aiSugGoal === "CUSTOM" && aiSugCustomLabel
+                    ? `Tailored to: ${aiSugCustomLabel}. Refresh for a new mix.`
+                    : aiSugGoal
+                      ? `Tailored to your goal: ${aiSugGoal.toLowerCase()}. Refresh for a new mix.`
+                      : "Five ideas you can add in one tap — refresh for a new mix."}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-ghost flex items-center gap-1.5 px-2 py-1 text-xs"
+              disabled={aiSugLoading}
+              onClick={requireAuth(() => void fetchAiSuggestions())}
+              aria-label="Refresh AI suggestions"
+            >
+              <RefreshCw className={clsx("h-3.5 w-3.5", aiSugLoading && "animate-spin")} />
+              Refresh
+            </button>
+          </div>
+          <div className="mt-4 space-y-2">
+            {aiSugLoading && aiSuggestions.length === 0 ? (
+              <div className="space-y-2">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-[96%]" />
+              </div>
+            ) : null}
+            {aiSuggestions.map((s) => {
+              const rowKey = `${s.title}::${s.emoji}`;
+              const busy = addingSuggestionKey === rowKey;
+              return (
+                <div
+                  key={rowKey}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-canvas px-3 py-2.5"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="text-lg" aria-hidden>
+                      {s.emoji}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-text">{s.title}</p>
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-text-muted">{s.lifeArea}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-primary shrink-0 px-3 py-1.5 text-xs"
+                    disabled={busy || aiSugLoading}
+                    onClick={requireAuth(() => void addFromSuggestion(s))}
+                  >
+                    {busy ? "Adding…" : "+ Add"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       <AnimatePresence initial={false}>
         {formOpen ? (
@@ -581,5 +785,9 @@ export default function HabitsPage() {
           })}
       </div>
     </div>
+    <XpFloatLayer items={xpFloats} />
+    <BadgeEarnedModal badge={badgeEarned} onClose={() => setBadgeEarned(null)} />
+    <LevelUpModal open={levelUpOpen} level={levelUpLevel} onClose={() => setLevelUpOpen(false)} />
+    </>
   );
 }

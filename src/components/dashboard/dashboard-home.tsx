@@ -19,9 +19,11 @@ import {
   YAxis,
 } from "recharts";
 import { useAuthModal } from "@/components/auth/auth-modal-context";
+import { BadgeEarnedModal, type BadgeEarned } from "@/components/gamification/badge-earned-modal";
 import { LevelUpModal } from "@/components/gamification/level-up-modal";
 import type { XpFloatItem } from "@/components/gamification/xp-float-label";
 import { XpFloatLayer } from "@/components/gamification/xp-float-label";
+import { AiGamePlanCard } from "./ai-game-plan-card";
 import { CountUp } from "@/components/ui/count-up";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MiniSparkline } from "@/components/ui/mini-sparkline";
@@ -29,6 +31,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SkeletonCard } from "@/components/ui/skeleton-card";
 import { fireHabitConfetti } from "@/lib/confetti-burst";
 import { parseHabitUiMeta } from "@/lib/habit-ui-meta";
+import { levelDisplayName } from "@/lib/gamification/levels";
 import type { AnalyticsOverviewPayload } from "@/lib/analytics-overview";
 
 type Overview = {
@@ -40,7 +43,27 @@ type Overview = {
   level: number;
   streakFreezes: number;
   badges: number;
+  coins?: number;
+  xpToNext?: number;
+  levelProgress?: number;
 };
+
+type DailyChallengeRow = {
+  key: string;
+  text: string;
+  progress: number;
+  targetCount: number;
+  completed: boolean;
+  xpReward: number;
+};
+
+const MOOD_QUICK = [
+  { score: 1, emoji: "😣", label: "Rough" },
+  { score: 2, emoji: "😕", label: "Low" },
+  { score: 3, emoji: "😐", label: "OK" },
+  { score: 4, emoji: "🙂", label: "Good" },
+  { score: 5, emoji: "😄", label: "Great" },
+] as const;
 
 type HabitRow = {
   id: string;
@@ -110,6 +133,10 @@ export function DashboardHome() {
   const [levelUpOpen, setLevelUpOpen] = useState(false);
   const [levelUpLevel, setLevelUpLevel] = useState(1);
   const prevLevelRef = useRef<number | null>(null);
+  const [badgeEarned, setBadgeEarned] = useState<BadgeEarned | null>(null);
+  const [challenges, setChallenges] = useState<DailyChallengeRow[]>([]);
+  const [topBadgeTitles, setTopBadgeTitles] = useState<string[]>([]);
+  const [moodToday, setMoodToday] = useState<{ moodScore: number } | null>(null);
 
   const todayKey = format(startOfDay(new Date()), "yyyy-MM-dd");
 
@@ -118,23 +145,40 @@ export function DashboardHome() {
       setOverview(null);
       setHabits([]);
       setLogs([]);
+      setChallenges([]);
+      setTopBadgeTitles([]);
+      setMoodToday(null);
       setLoading(false);
       return;
     }
     setLoading(true);
     const from = subDays(new Date(), 84).toISOString();
-    const [o, h, l, ax, tt] = await Promise.all([
+    const [o, h, l, ax, tt, ch, bd, mo] = await Promise.all([
       fetch("/api/stats/overview").then((r) => (r.ok ? r.json() : null)),
       fetch("/api/habits").then((r) => (r.ok ? r.json() : [])),
       fetch(`/api/logs?from=${encodeURIComponent(from)}`).then((r) => (r.ok ? r.json() : [])),
       fetch("/api/analytics/overview").then((r) => (r.ok ? r.json() : null)),
       fetch("/api/tasks/today").then((r) => (r.ok ? r.json() : null)),
+      fetch("/api/gamification/daily-challenges").then((r) => (r.ok ? r.json() : { challenges: [] })),
+      fetch("/api/gamification/badges").then((r) => (r.ok ? r.json() : { earned: [] })),
+      fetch("/api/mood").then((r) => (r.ok ? r.json() : { todayLog: null })),
     ]);
     setOverview(o);
     setAnalytics(ax);
     setTodayTasks(Array.isArray(tt?.tasks) ? tt.tasks.slice(0, 8) : []);
     setHabits(Array.isArray(h) ? h : []);
     setLogs(Array.isArray(l) ? l : []);
+    setChallenges(Array.isArray(ch.challenges) ? ch.challenges : []);
+    setTopBadgeTitles(
+      Array.isArray(bd.earned)
+        ? bd.earned.slice(0, 3).map((e: { achievement: { title: string } }) => e.achievement.title)
+        : [],
+    );
+    setMoodToday(
+      mo?.todayLog && typeof mo.todayLog.moodScore === "number"
+        ? { moodScore: mo.todayLog.moodScore }
+        : null,
+    );
     setLoading(false);
   }, [session?.user?.id]);
 
@@ -248,17 +292,56 @@ export function DashboardHome() {
       toast.error("Could not log habit.");
       return;
     }
-    const data = (await res.json()) as { id: string; habitId: string; date: string; status: LogRow["status"] };
+    const payload = (await res.json()) as {
+      id: string;
+      habitId: string;
+      date: string;
+      status: LogRow["status"];
+      gamification?: { newBadges?: BadgeEarned[] };
+    };
     setLogs((l) => [
       ...l.filter((x) => x.id !== pendingLogId),
-      { id: data.id, habitId: data.habitId, date: data.date, status: data.status },
+      { id: payload.id, habitId: payload.habitId, date: payload.date, status: payload.status },
     ]);
+    const nb = payload.gamification?.newBadges;
+    if (nb?.length) {
+      setBadgeEarned(nb[0]);
+      for (let i = 1; i < nb.length; i++) {
+        toast.success(`Badge: ${nb[i].title}`);
+      }
+    }
     fireHabitConfetti(sourceEl);
     if (sourceEl) {
       const r = sourceEl.getBoundingClientRect();
       pushXpFloat(r.left + r.width / 2, r.top);
     }
     toast.success("Habit logged! 🔥 Keep it up");
+    void load();
+  }
+
+  async function logMood(score: number) {
+    const res = await fetch("/api/mood", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ moodScore: score }),
+    });
+    if (!res.ok) {
+      toast.error("Could not save mood.");
+      return;
+    }
+    const payload = (await res.json()) as {
+      moodScore: number;
+      gamification?: { newBadges?: BadgeEarned[]; level?: number };
+    };
+    setMoodToday({ moodScore: payload.moodScore });
+    const nb = payload.gamification?.newBadges;
+    if (nb?.length) {
+      setBadgeEarned(nb[0]);
+      for (let i = 1; i < nb.length; i++) {
+        toast.success(`Badge: ${nb[i].title}`);
+      }
+    }
+    toast.success("Mood saved");
     void load();
   }
 
@@ -313,6 +396,7 @@ export function DashboardHome() {
     <div className="space-y-8">
       <XpFloatLayer items={xpFloats} />
       <LevelUpModal open={levelUpOpen} level={levelUpLevel} onClose={() => setLevelUpOpen(false)} />
+      <BadgeEarnedModal badge={badgeEarned} onClose={() => setBadgeEarned(null)} />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-2xl font-semibold tracking-tight text-text md:text-3xl">
@@ -404,6 +488,102 @@ export function DashboardHome() {
           </>
         )}
       </div>
+
+      {session?.user ? <AiGamePlanCard /> : null}
+
+      {session?.user && overview ? (
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="app-card lg:col-span-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Level progress</p>
+            <p className="mt-1 text-lg font-semibold text-text">{levelDisplayName(overview.level)}</p>
+            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-canvas">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-500"
+                style={{ width: `${Math.round((overview.levelProgress ?? 0) * 100)}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-text-muted">
+              <span className="font-mono text-text">{overview.xp}</span> XP
+              {overview.xpToNext != null && overview.xpToNext > 0 ? (
+                <> · <span className="font-mono">{overview.xpToNext}</span> XP to next</>
+              ) : (
+                <> · max level</>
+              )}
+            </p>
+            {typeof overview.coins === "number" ? (
+              <p className="mt-1 text-xs text-text-muted">
+                🪙 <span className="font-mono font-semibold text-text">{overview.coins}</span> coins
+              </p>
+            ) : null}
+            <div className="mt-4 border-t border-border pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Mood check-in</p>
+              {moodToday ? (
+                <p className="mt-2 text-sm text-text">
+                  Logged today: <span className="text-lg">{MOOD_QUICK.find((m) => m.score === moodToday.moodScore)?.emoji ?? "—"}</span>{" "}
+                  <span className="text-text-muted">
+                    {MOOD_QUICK.find((m) => m.score === moodToday.moodScore)?.label ?? ""}
+                  </span>
+                </p>
+              ) : (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {MOOD_QUICK.map((m) => (
+                    <button
+                      key={m.score}
+                      type="button"
+                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-canvas text-lg transition hover:border-primary hover:bg-primary-soft"
+                      aria-label={m.label}
+                      title={m.label}
+                      onClick={requireAuth(() => void logMood(m.score))}
+                    >
+                      {m.emoji}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="app-card lg:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-text">Today&apos;s challenges</h2>
+              <Link href="/shop" className="text-[11px] font-medium text-primary">
+                Spend coins →
+              </Link>
+            </div>
+            {challenges.length === 0 ? (
+              <p className="mt-3 text-sm text-text-muted">Loading challenges…</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {challenges.map((c) => (
+                  <li
+                    key={c.key}
+                    className="flex items-center justify-between gap-2 rounded-xl border border-border bg-canvas px-3 py-2 text-sm"
+                  >
+                    <span className={c.completed ? "font-medium text-success" : "text-text"}>{c.text}</span>
+                    <span className="shrink-0 font-mono text-[11px] text-text-muted">
+                      {c.progress}/{c.targetCount}
+                      {c.completed ? " ✓" : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {session?.user && topBadgeTitles.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-text-muted">Top badges</span>
+          {topBadgeTitles.map((t) => (
+            <span key={t} className="rounded-full bg-primary-soft px-3 py-1 text-xs font-medium text-primary">
+              {t}
+            </span>
+          ))}
+          <Link href="/badges" className="text-xs font-medium text-primary">
+            View all →
+          </Link>
+        </div>
+      ) : null}
 
       {session?.user ? (
         <div className="grid gap-6 lg:grid-cols-3">

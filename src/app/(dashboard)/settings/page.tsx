@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { signOut } from "next-auth/react";
 import { AnimatePresence, motion } from "framer-motion";
 import toast from "react-hot-toast";
-import { Camera, Lock, Palette, Shield, Sparkles, Trash2 } from "lucide-react";
+import { Camera, Download, Lock, Palette, Shield, Sparkles, Trash2 } from "lucide-react";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { publicDisplayName } from "@/lib/user-public";
@@ -79,6 +79,35 @@ export default function SettingsPage() {
       clearTimeout(id);
     };
   }, [username]);
+
+  const [exporting, setExporting] = useState<false | "json" | "csv">(false);
+
+  async function downloadExport(kind: "json" | "csv") {
+    setExporting(kind);
+    try {
+      const q = kind === "csv" ? "?format=csv" : "";
+      const res = await fetch(`/api/user/export${q}`);
+      if (!res.ok) {
+        toast.error("Could not export data.");
+        return;
+      }
+      const cd = res.headers.get("Content-Disposition");
+      const fallback =
+        kind === "csv" ? `habit-completion-history-${Date.now()}.csv` : `habit-tracker-export-${Date.now()}.json`;
+      const match = cd?.match(/filename="([^"]+)"/);
+      const filename = match?.[1] ?? fallback;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Download started.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function saveIdentity() {
     const trimmed = displayName.trim();
@@ -294,6 +323,37 @@ export default function SettingsPage() {
                 <p className="text-xs font-medium text-text-muted">Email</p>
                 <p className="text-sm text-text">{profile.emailMasked}</p>
               </div>
+            </div>
+          </div>,
+        )}
+
+        {sectionCard(
+          <div>
+            <div className="mb-4 flex items-center gap-2">
+              <Download className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-bold text-text">Export data</h2>
+            </div>
+            <p className="mb-3 text-xs text-text-muted">
+              Download everything tied to your account (GDPR-friendly backup): habits, task logs, mood entries,
+              badges, and more.
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <button
+                type="button"
+                className="rounded-lg border border-[#D1D5DB] px-4 py-2 text-sm font-semibold text-text transition hover:bg-[#F9FAFB]"
+                disabled={!!exporting}
+                onClick={() => void downloadExport("json")}
+              >
+                {exporting === "json" ? "Preparing…" : "Download JSON (full export)"}
+              </button>
+              <button
+                type="button"
+                className="rounded-lg border border-[#D1D5DB] px-4 py-2 text-sm font-semibold text-text transition hover:bg-[#F9FAFB]"
+                disabled={!!exporting}
+                onClick={() => void downloadExport("csv")}
+              >
+                {exporting === "csv" ? "Preparing…" : "Download CSV (habit completions)"}
+              </button>
             </div>
           </div>,
         )}

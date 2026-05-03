@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addDays, format, isBefore, startOfDay, subDays } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
@@ -13,6 +13,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { SkeletonCard } from "@/components/ui/skeleton-card";
 import { parseHabitUiMeta } from "@/lib/habit-ui-meta";
 import { useAuthModal } from "@/components/auth/auth-modal-context";
+import { BadgeEarnedModal, type BadgeEarned } from "@/components/gamification/badge-earned-modal";
+import { LevelUpModal } from "@/components/gamification/level-up-modal";
 
 type Project = {
   id: string;
@@ -66,6 +68,10 @@ export function TasksPageClient() {
   const [menuTaskId, setMenuTaskId] = useState<string | null>(null);
   const [linkedTask, setLinkedTask] = useState<{ id: string; title: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [badgeEarned, setBadgeEarned] = useState<BadgeEarned | null>(null);
+  const [levelUpOpen, setLevelUpOpen] = useState(false);
+  const [levelUpLevel, setLevelUpLevel] = useState(1);
+  const prevLevelRef = useRef<number | null>(null);
 
   const [newProject, setNewProject] = useState({ name: "", icon: "📁", color: "#6366f1" });
   const [newTask, setNewTask] = useState({
@@ -129,6 +135,18 @@ export function TasksPageClient() {
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    if (!session?.user?.id) {
+      prevLevelRef.current = null;
+      return;
+    }
+    void fetch("/api/stats/overview")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((o: { level?: number } | null) => {
+        if (typeof o?.level === "number") prevLevelRef.current = o.level;
+      });
+  }, [session?.user?.id]);
 
   useEffect(() => {
     if (!session?.user) return;
@@ -338,8 +356,27 @@ export function TasksPageClient() {
       toast.error("Update failed");
       return;
     }
-    const raw = await res.json();
-    setTasks((ts) => ts.map((t) => (t.id === task.id ? mergeServerTask(raw, optimistic) : t)));
+    const raw = (await res.json()) as TaskRow & {
+      gamification?: { newBadges?: BadgeEarned[]; level?: number };
+    };
+    const { gamification, ...taskRaw } = raw;
+    setTasks((ts) => ts.map((t) => (t.id === task.id ? mergeServerTask(taskRaw, optimistic) : t)));
+    if (next === "done" && gamification) {
+      if (gamification.newBadges?.length) {
+        setBadgeEarned(gamification.newBadges[0]);
+        for (let i = 1; i < gamification.newBadges.length; i++) {
+          toast.success(`Badge: ${gamification.newBadges[i].title}`);
+        }
+      }
+      const gl = gamification.level;
+      if (typeof gl === "number") {
+        if (prevLevelRef.current !== null && gl > prevLevelRef.current) {
+          setLevelUpLevel(gl);
+          setLevelUpOpen(true);
+        }
+        prevLevelRef.current = gl;
+      }
+    }
     void loadProjects();
   }
 
@@ -359,6 +396,7 @@ export function TasksPageClient() {
   }
 
   return (
+    <>
     <div className="flex flex-col gap-6 xl:flex-row">
       {/* Left — projects */}
       <aside className="w-full shrink-0 space-y-3 xl:w-[240px]">
@@ -813,5 +851,8 @@ export function TasksPageClient() {
         ) : null}
       </aside>
     </div>
+    <BadgeEarnedModal badge={badgeEarned} onClose={() => setBadgeEarned(null)} />
+    <LevelUpModal open={levelUpOpen} level={levelUpLevel} onClose={() => setLevelUpOpen(false)} />
+    </>
   );
 }

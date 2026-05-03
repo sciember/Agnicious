@@ -1,5 +1,5 @@
 import { HabitStatus } from "@prisma/client";
-import { endOfDay, getDay, getHours, startOfDay, subDays } from "date-fns";
+import { endOfDay, format, getDay, getHours, startOfDay, subDays } from "date-fns";
 import { prisma } from "@/lib/prisma";
 
 export type PerHabitBreakdown = {
@@ -7,6 +7,15 @@ export type PerHabitBreakdown = {
   title: string;
   completionRate: number;
   doneCount: number;
+};
+
+export type MoodAnalyticsSlice = {
+  loggedToday: boolean;
+  todayScore: number | null;
+  last14Days: { date: string; avgScore: number | null }[];
+  avg7d: number | null;
+  logStreakDays: number;
+  totalLogs90d: number;
 };
 
 export type AnalyticsOverviewPayload = {
@@ -36,6 +45,7 @@ export type AnalyticsOverviewPayload = {
     bestDay: string;
     bestHour: string;
   };
+  mood: MoodAnalyticsSlice;
   aiContext: Record<string, unknown>;
 };
 
@@ -82,6 +92,7 @@ export async function buildAnalyticsOverview(userId: string): Promise<AnalyticsO
     tasksTotalYesterday,
     pomodoroYest,
     taskListToday,
+    moodLogs90d,
   ] = await Promise.all([
     prisma.habit.count({ where: { userId, isArchived: false } }),
     prisma.streak.findMany({ where: { userId } }),
@@ -172,6 +183,10 @@ export async function buildAnalyticsOverview(userId: string): Promise<AnalyticsO
         ],
       },
       select: { priority: true },
+    }),
+    prisma.moodLog.findMany({
+      where: { userId, loggedAt: { gte: startOfDay(subDays(now, 89)), lte: todayEnd } },
+      select: { moodScore: true, loggedAt: true },
     }),
   ]);
 
@@ -271,6 +286,59 @@ export async function buildAnalyticsOverview(userId: string): Promise<AnalyticsO
   }
   const bestHour = bestHc >= 0 ? `${bestH % 12 || 12}${bestH < 12 ? "am" : "pm"}` : "—";
 
+  const byDayMood = new Map<string, number[]>();
+  for (const m of moodLogs90d) {
+    const k = format(startOfDay(m.loggedAt), "yyyy-MM-dd");
+    if (!byDayMood.has(k)) byDayMood.set(k, []);
+    byDayMood.get(k)!.push(m.moodScore);
+  }
+
+  const last14Days: MoodAnalyticsSlice["last14Days"] = [];
+  for (let i = 13; i >= 0; i--) {
+    const k = format(startOfDay(subDays(now, i)), "yyyy-MM-dd");
+    const arr = byDayMood.get(k);
+    last14Days.push({
+      date: k,
+      avgScore:
+        arr?.length != null && arr.length > 0
+          ? Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 10) / 10
+          : null,
+    });
+  }
+
+  const todayK = format(todayStart, "yyyy-MM-dd");
+  const todayMoodArr = byDayMood.get(todayK);
+  const loggedTodayMood = !!todayMoodArr?.length;
+  const todayMoodScore =
+    todayMoodArr?.length != null && todayMoodArr.length > 0
+      ? Math.round((todayMoodArr.reduce((a, b) => a + b, 0) / todayMoodArr.length) * 10) / 10
+      : null;
+
+  const last7Scores = last14Days
+    .slice(-7)
+    .map((x) => x.avgScore)
+    .filter((x): x is number => x != null);
+  const moodAvg7d =
+    last7Scores.length > 0
+      ? Math.round((last7Scores.reduce((a, b) => a + b, 0) / last7Scores.length) * 10) / 10
+      : null;
+
+  let moodLogStreak = 0;
+  for (let i = 0; i < 90; i++) {
+    const k = format(startOfDay(subDays(now, i)), "yyyy-MM-dd");
+    if (byDayMood.has(k) && (byDayMood.get(k)?.length ?? 0) > 0) moodLogStreak += 1;
+    else break;
+  }
+
+  const mood: MoodAnalyticsSlice = {
+    loggedToday: loggedTodayMood,
+    todayScore: todayMoodScore,
+    last14Days,
+    avg7d: moodAvg7d,
+    logStreakDays: moodLogStreak,
+    totalLogs90d: moodLogs90d.length,
+  };
+
   const aiContext = {
     habits: {
       total: habits,
@@ -296,6 +364,13 @@ export async function buildAnalyticsOverview(userId: string): Promise<AnalyticsO
       trend,
       bestDay,
       bestHour,
+    },
+    mood: {
+      loggedToday: mood.loggedToday,
+      todayScore: mood.todayScore,
+      avg7d: mood.avg7d,
+      logStreakDays: mood.logStreakDays,
+      totalLogs90d: mood.totalLogs90d,
     },
   };
 
@@ -326,6 +401,7 @@ export async function buildAnalyticsOverview(userId: string): Promise<AnalyticsO
       bestDay,
       bestHour,
     },
+    mood,
     aiContext,
   };
 }

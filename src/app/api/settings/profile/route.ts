@@ -18,6 +18,7 @@ export async function GET() {
       avatarUrl: true,
       image: true,
       email: true,
+      onboardingGoal: true,
     },
   });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });

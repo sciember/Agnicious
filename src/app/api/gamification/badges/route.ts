@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
+import { BADGE_CATALOG } from "@/lib/gamification/badges";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
@@ -12,5 +13,12 @@ export async function GET() {
     include: { achievement: true },
     orderBy: { earnedAt: "desc" },
   });
-  return NextResponse.json(earned);
+  const earnedCodes = new Set(earned.map((e) => e.achievement.code));
+
+  const catalog = BADGE_CATALOG.map((b) => ({
+    ...b,
+    earned: earnedCodes.has(b.code),
+  }));
+
+  return NextResponse.json({ earned, catalog });
 }

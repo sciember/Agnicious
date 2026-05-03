@@ -27,11 +27,25 @@ type LogRow = {
   status: "DONE" | "SKIP" | "FAIL";
 };
 
+const MOOD_EMOJI: Record<number, string> = {
+  1: "😣",
+  2: "😕",
+  3: "😐",
+  4: "🙂",
+  5: "😄",
+};
+
+function moodEmojiForScore(score: number) {
+  const r = Math.min(5, Math.max(1, Math.round(score)));
+  return MOOD_EMOJI[r] ?? "😐";
+}
+
 export function CalendarPageClient() {
   const { data: session } = useSession();
   const [cursor, setCursor] = useState(() => new Date());
   const [habits, setHabits] = useState<Habit[]>([]);
   const [logs, setLogs] = useState<LogRow[]>([]);
+  const [moodByDay, setMoodByDay] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Date | null>(null);
 
@@ -39,17 +53,28 @@ export function CalendarPageClient() {
     if (!session?.user?.id) {
       setHabits([]);
       setLogs([]);
+      setMoodByDay({});
       setLoading(false);
       return;
     }
     setLoading(true);
-    const from = subMonths(new Date(), 6).toISOString();
-    const [h, l] = await Promise.all([
+    const fromDate = subMonths(new Date(), 6);
+    const from = fromDate.toISOString();
+    const to = new Date().toISOString();
+    const [h, l, moodPayload] = await Promise.all([
       fetch("/api/habits").then((r) => (r.ok ? r.json() : [])),
       fetch(`/api/logs?from=${encodeURIComponent(from)}`).then((r) => (r.ok ? r.json() : [])),
+      fetch(
+        `/api/mood?from=${encodeURIComponent(fromDate.toISOString())}&to=${encodeURIComponent(to)}`,
+      ).then((r) => (r.ok ? r.json() : { byDay: {} })),
     ]);
     setHabits(Array.isArray(h) ? h : []);
     setLogs(Array.isArray(l) ? l : []);
+    setMoodByDay(
+      moodPayload && typeof moodPayload.byDay === "object" && moodPayload.byDay
+        ? (moodPayload.byDay as Record<string, number>)
+        : {},
+    );
     setLoading(false);
   }, [session?.user?.id]);
 
@@ -113,11 +138,15 @@ export function CalendarPageClient() {
     ? logs.filter((l) => isSameDay(new Date(l.date), selected))
     : [];
 
+  const selectedDayKey = selected ? format(selected, "yyyy-MM-dd") : null;
+  const selectedMood =
+    selectedDayKey != null && moodByDay[selectedDayKey] != null ? moodByDay[selectedDayKey] : null;
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-text md:text-3xl">Calendar</h1>
-        <p className="mt-1 text-sm text-text-muted">Tap a day to review habit logs.</p>
+        <p className="mt-1 text-sm text-text-muted">Tap a day to review habit logs and mood check-ins.</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -186,6 +215,20 @@ export function CalendarPageClient() {
                             );
                           })}
                       </div>
+                      {(() => {
+                        const mk = format(c.date, "yyyy-MM-dd");
+                        const ms = moodByDay[mk];
+                        if (ms == null) return null;
+                        return (
+                          <span
+                            className="mt-auto text-sm leading-none"
+                            title={`Mood ${ms}/5`}
+                            aria-label={`Mood ${ms} out of 5`}
+                          >
+                            {moodEmojiForScore(ms)}
+                          </span>
+                        );
+                      })()}
                     </button>
                   ),
                 )}
@@ -206,8 +249,16 @@ export function CalendarPageClient() {
                 className="mt-3 space-y-3"
               >
                 <p className="font-mono text-sm text-primary">{format(selected, "EEEE, MMM d")}</p>
+                {selectedMood != null ? (
+                  <div className="flex items-center gap-2 rounded-xl border border-border bg-canvas px-3 py-2 text-sm">
+                    <span className="text-lg">{moodEmojiForScore(selectedMood)}</span>
+                    <span className="text-text">
+                      Mood <span className="font-mono font-semibold">{selectedMood}</span>/5 (daily avg)
+                    </span>
+                  </div>
+                ) : null}
                 {selectedLogs.length === 0 ? (
-                  <p className="text-sm text-text-muted">No logs for this day.</p>
+                  <p className="text-sm text-text-muted">No habit logs for this day.</p>
                 ) : (
                   <ul className="space-y-2">
                     {selectedLogs.map((l) => {

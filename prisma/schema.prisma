@@ -68,7 +68,12 @@ model User {
   weekStartsOn      WeekStart   @default(MONDAY)
   level             Int         @default(1)
   xp                Int         @default(0)
+  coins             Int         @default(0)
+  /// Count of AI coach chat turns (for badges)
+  aiCoachTurns      Int         @default(0)
   streakFreezeCount Int         @default(1)
+  /// Unlocked shop items: { themes?: string[], frames?: string[] }
+  shopUnlocks       Json?
   /// Onboarding: main goal key (HEALTH, PRODUCTIVITY, LEARNING, MINDFULNESS) or CUSTOM:label
   onboardingGoal           String?
   onboardingCompleted      Boolean   @default(false)
@@ -95,6 +100,24 @@ model User {
   socialChallengeParticipants SocialChallengeParticipant[]
   notifications           Notification[] @relation("NotificationRecipient")
   notificationsSent       Notification[] @relation("NotificationSender")
+  dailyChallengeProgress  UserDailyChallengeProgress[]
+}
+
+model UserDailyChallengeProgress {
+  id           String    @id @default(cuid())
+  userId       String
+  /// UTC calendar date
+  date         DateTime @db.Date
+  challengeKey String
+  progress     Int       @default(0)
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date, challengeKey])
+  @@index([userId, date])
 }
 
 model Notification {

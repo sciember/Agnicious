@@ -2,6 +2,9 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
+import { refreshUserLevelFromXp } from "@/lib/gamification/award-badge";
+import { evaluateBadgesAfterTaskDone } from "@/lib/gamification/evaluate-badges";
+import { syncUserDailyChallenges } from "@/lib/gamification/sync-daily-challenges";
 import { prisma } from "@/lib/prisma";
 
 const patchSchema = z.object({
@@ -29,7 +32,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const existing = await prisma.task.findFirst({
     where: { id, userId: session.user.id },
-    select: { id: true, projectId: true },
+    select: { id: true, projectId: true, status: true },
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -48,6 +51,8 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   const nextProjectId = data.projectId !== undefined ? data.projectId : existing.projectId;
+
+  const becameDone = data.status === "done" && existing.status !== "done";
 
   const task = await prisma.task.update({
     where: { id },
@@ -75,7 +80,32 @@ export async function PATCH(request: Request, { params }: Params) {
       : {}),
   });
 
-  return NextResponse.json(task);
+  let gamification: { newBadges: { code: string; title: string; description: string }[]; xp: number; coinsEarned: number; level: number } | undefined;
+
+  if (becameDone) {
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: {
+        xp: { increment: 15 },
+        coins: { increment: 10 },
+      },
+    });
+    await refreshUserLevelFromXp(session.user.id);
+    const newBadges = await evaluateBadgesAfterTaskDone(session.user.id);
+    await syncUserDailyChallenges(session.user.id).catch(() => undefined);
+    const u = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { xp: true, level: true },
+    });
+    gamification = {
+      newBadges,
+      xp: u?.xp ?? 0,
+      coinsEarned: 10,
+      level: u?.level ?? 1,
+    };
+  }
+
+  return NextResponse.json(gamification ? { ...task, gamification } : task);
 }
 
 export async function DELETE(_: Request, { params }: Params) {
