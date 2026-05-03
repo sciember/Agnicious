@@ -2,6 +2,7 @@
 
 import { formatDistanceToNowStrict } from "date-fns";
 import { useCallback, useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SkeletonCard } from "@/components/ui/skeleton-card";
@@ -28,17 +29,51 @@ function isResolved(data: string | null): boolean {
 }
 
 export default function NotificationsPage() {
+  const { data: session, status } = useSession();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
 
   const load = useCallback(async () => {
-    const r = await fetch("/api/notifications");
-    const d = (await r.json().catch(() => null)) as { items?: NotificationItem[] } | null;
-    setItems(Array.isArray(d?.items) ? d.items : []);
-    setLoading(false);
-  }, []);
+    if (status === "loading") {
+      setLoading(true);
+      return;
+    }
+    if (!session?.user) {
+      setItems([]);
+      setLoadError(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const r = await fetch("/api/notifications");
+      const raw = await r.text();
+      let d: { items?: NotificationItem[]; error?: string } | null = null;
+      try {
+        d = raw ? (JSON.parse(raw) as { items?: NotificationItem[]; error?: string }) : null;
+      } catch {
+        d = null;
+      }
+      if (!r.ok) {
+        const msg = typeof d?.error === "string" ? d.error : `Could not load notifications (${r.status}).`;
+        console.error("[notifications] GET failed", r.status, raw);
+        setLoadError(msg);
+        setItems([]);
+        return;
+      }
+      setItems(Array.isArray(d?.items) ? d.items : []);
+    } catch (err) {
+      console.error("[notifications] load error", err);
+      setLoadError("Network error while loading notifications.");
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [session?.user, status]);
 
   useEffect(() => {
     void load();
@@ -134,7 +169,7 @@ export default function NotificationsPage() {
     toast.success(action === "accept" ? "Joined challenge." : "Declined invite.");
   }
 
-  if (loading) {
+  if (status === "loading" || (session?.user && loading)) {
     return (
       <div className="mx-auto max-w-3xl space-y-4">
         <div className="flex items-center justify-between">
@@ -148,6 +183,21 @@ export default function NotificationsPage() {
     );
   }
 
+  if (status === "unauthenticated") {
+    return (
+      <div className="mx-auto max-w-3xl space-y-4">
+        <h1 className="text-2xl font-semibold tracking-tight text-text">Notifications</h1>
+        <EmptyState
+          illustration="bell"
+          title="Sign in to see notifications"
+          description="Your friend requests, invites, and updates appear here when you&apos;re signed in."
+          ctaLabel="Sign in"
+          ctaHref="/sign-in"
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <div className="flex items-center justify-between">
@@ -157,7 +207,11 @@ export default function NotificationsPage() {
         </button>
       </div>
 
-      {items.length === 0 ? (
+      {loadError ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{loadError}</div>
+      ) : null}
+
+      {!loadError && items.length === 0 ? (
         <EmptyState
           illustration="bell"
           title="Your journey starts here"
@@ -165,7 +219,7 @@ export default function NotificationsPage() {
           ctaLabel="Go to Social"
           ctaHref="/social"
         />
-      ) : (
+      ) : !loadError ? (
         <div className="space-y-3">
           {items.map((n) => {
             const resolved = isResolved(n.data);
@@ -233,7 +287,7 @@ export default function NotificationsPage() {
             );
           })}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

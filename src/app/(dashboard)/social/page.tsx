@@ -17,6 +17,23 @@ async function jsonFetcher<T>(url: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** Never throws — avoids SWR staying in `undefined` forever when an endpoint 401/500s. */
+async function socialListFetcher<T>(url: string): Promise<T[]> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error("[social] list fetch failed", url, res.status, body);
+      return [];
+    }
+    const data: unknown = await res.json();
+    return Array.isArray(data) ? (data as T[]) : [];
+  } catch (err) {
+    console.error("[social] list fetch error", url, err);
+    return [];
+  }
+}
+
 type FriendUser = { id: string; username: string | null; displayName: string; photoUrl: string | null };
 type Friend = {
   id: string;
@@ -71,12 +88,18 @@ export default function SocialPage() {
 
   const { data: friends, mutate: mutateFriends } = useSWR<Friend[]>(
     session?.user ? "/api/social/friends" : null,
-    jsonFetcher,
+    socialListFetcher<Friend>,
+    { shouldRetryOnError: false },
   );
-  const { data: feed, mutate: mutateFeed } = useSWR<FeedItem[]>(session?.user ? "/api/social/feed" : null, jsonFetcher);
+  const { data: feed, mutate: mutateFeed } = useSWR<FeedItem[]>(
+    session?.user ? "/api/social/feed" : null,
+    socialListFetcher<FeedItem>,
+    { shouldRetryOnError: false },
+  );
   const { data: challenges, mutate: mutateChallenges } = useSWR<SocialChallenge[]>(
     session?.user ? "/api/social/challenges" : null,
-    jsonFetcher,
+    socialListFetcher<SocialChallenge>,
+    { shouldRetryOnError: false },
   );
   const { data: leaders } = useSWR<Leader[]>("/api/leaderboard", jsonFetcher);
 

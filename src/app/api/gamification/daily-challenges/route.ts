@@ -7,6 +7,11 @@ export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const challenges = await syncUserDailyChallenges(session.user.id);
-  return NextResponse.json({ challenges });
+  try {
+    const challenges = await syncUserDailyChallenges(session.user.id);
+    return NextResponse.json({ challenges });
+  } catch (err) {
+    console.error("[api/gamification/daily-challenges]", err);
+    return NextResponse.json({ challenges: [] });
+  }
 }

@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import clsx from "clsx";
+import { Lock } from "lucide-react";
 import type { BadgeDefinition } from "@/lib/gamification/badges";
+import { SkeletonCard } from "@/components/ui/skeleton-card";
 
 type CatalogRow = BadgeDefinition & { earned: boolean };
 
@@ -46,7 +48,11 @@ export default function BadgesPage() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-text-muted">Loading…</p>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={i} className="min-h-[120px]" lines={3} />
+          ))}
+        </div>
       ) : !session?.user ? (
         <p className="text-sm text-text-muted">Sign in to track badges.</p>
       ) : (
@@ -59,18 +65,23 @@ export default function BadgesPage() {
               transition={{ delay: i * 0.03 }}
               className={clsx(
                 "app-card relative overflow-hidden",
-                !b.earned && "opacity-70 grayscale",
+                !b.earned && "opacity-75 grayscale",
               )}
             >
               <div className="flex items-start gap-3">
                 <div
                   className={clsx(
-                    "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-2xl",
+                    "relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-2xl",
                     b.earned ? "bg-primary-soft" : "bg-canvas",
                   )}
                   aria-hidden
                 >
-                  {b.earned ? "🏅" : "◇"}
+                  <span className={clsx(!b.earned && "opacity-40")}>🏅</span>
+                  {!b.earned ? (
+                    <span className="absolute inset-0 flex items-center justify-center">
+                      <Lock className="h-5 w-5 text-text-muted" strokeWidth={2} aria-hidden />
+                    </span>
+                  ) : null}
                 </div>
                 <div className="min-w-0">
                   <p className="font-semibold text-text">{b.title}</p>

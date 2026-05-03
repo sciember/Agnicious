@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
+import Groq from "groq-sdk";
 import { authOptions } from "@/lib/auth";
 import { buildCoachSystemPrompt } from "@/lib/ai/coach-system-prompt";
 import { buildAnalyticsOverview } from "@/lib/analytics-overview";
@@ -17,7 +18,14 @@ export async function POST(request: Request) {
 
   if (!prompt) return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
   if (!process.env.GROQ_API_KEY) {
-    return NextResponse.json({ error: "GROQ_API_KEY is not configured" }, { status: 500 });
+    console.error("[api/ai/coach] Missing GROQ_API_KEY");
+    return NextResponse.json(
+      {
+        code: "GROQ_KEY_MISSING",
+        error: "AI Coach needs GROQ_API_KEY configured in environment variables",
+      },
+      { status: 503 },
+    );
   }
 
   const overview = await buildAnalyticsOverview(session.user.id);
@@ -28,36 +36,20 @@ export async function POST(request: Request) {
       ? `${prompt}\n\nProduce a multi-section response with: What went well; What needs improvement; Patterns you notice; Three actionable recommendations for tomorrow. Use headings or bold labels for each section.`
       : prompt;
 
+  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
   try {
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
-        temperature: 0.55,
-        messages: [
-          { role: "system", content: systemContent },
-          { role: "user", content: userContent },
-        ],
-      }),
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      temperature: 0.55,
+      messages: [
+        { role: "system", content: systemContent },
+        { role: "user", content: userContent },
+      ],
     });
 
-    if (!response.ok) {
-      const errorPayload = await response.text();
-      return NextResponse.json(
-        { error: "Groq request failed", details: errorPayload },
-        { status: 502 },
-      );
-    }
-
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
     const content =
-      data.choices?.[0]?.message?.content ??
+      completion.choices[0]?.message?.content ??
       "Focus on one keystone habit daily and track it right after completion.";
 
     await prisma.user.update({
@@ -81,7 +73,15 @@ export async function POST(request: Request) {
       contextScore: overview.productivity.score,
       newBadge,
     });
-  } catch {
-    return NextResponse.json({ error: "AI coach unavailable right now" }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[api/ai/coach] Groq or handler error:", err);
+    return NextResponse.json(
+      {
+        error: "AI coach request failed",
+        details: message,
+      },
+      { status: 500 },
+    );
   }
 }

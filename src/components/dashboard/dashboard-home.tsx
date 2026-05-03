@@ -152,34 +152,39 @@ export function DashboardHome() {
       return;
     }
     setLoading(true);
-    const from = subDays(new Date(), 84).toISOString();
-    const [o, h, l, ax, tt, ch, bd, mo] = await Promise.all([
-      fetch("/api/stats/overview").then((r) => (r.ok ? r.json() : null)),
-      fetch("/api/habits").then((r) => (r.ok ? r.json() : [])),
-      fetch(`/api/logs?from=${encodeURIComponent(from)}`).then((r) => (r.ok ? r.json() : [])),
-      fetch("/api/analytics/overview").then((r) => (r.ok ? r.json() : null)),
-      fetch("/api/tasks/today").then((r) => (r.ok ? r.json() : null)),
-      fetch("/api/gamification/daily-challenges").then((r) => (r.ok ? r.json() : { challenges: [] })),
-      fetch("/api/gamification/badges").then((r) => (r.ok ? r.json() : { earned: [] })),
-      fetch("/api/mood").then((r) => (r.ok ? r.json() : { todayLog: null })),
-    ]);
-    setOverview(o);
-    setAnalytics(ax);
-    setTodayTasks(Array.isArray(tt?.tasks) ? tt.tasks.slice(0, 8) : []);
-    setHabits(Array.isArray(h) ? h : []);
-    setLogs(Array.isArray(l) ? l : []);
-    setChallenges(Array.isArray(ch.challenges) ? ch.challenges : []);
-    setTopBadgeTitles(
-      Array.isArray(bd.earned)
-        ? bd.earned.slice(0, 3).map((e: { achievement: { title: string } }) => e.achievement.title)
-        : [],
-    );
-    setMoodToday(
-      mo?.todayLog && typeof mo.todayLog.moodScore === "number"
-        ? { moodScore: mo.todayLog.moodScore }
-        : null,
-    );
-    setLoading(false);
+    try {
+      const from = subDays(new Date(), 84).toISOString();
+      const [o, h, l, ax, tt, ch, bd, mo] = await Promise.all([
+        fetch("/api/stats/overview").then((r) => (r.ok ? r.json() : null)),
+        fetch("/api/habits").then((r) => (r.ok ? r.json() : [])),
+        fetch(`/api/logs?from=${encodeURIComponent(from)}`).then((r) => (r.ok ? r.json() : [])),
+        fetch("/api/analytics/overview").then((r) => (r.ok ? r.json() : null)),
+        fetch("/api/tasks/today").then((r) => (r.ok ? r.json() : null)),
+        fetch("/api/gamification/daily-challenges").then((r) => (r.ok ? r.json() : { challenges: [] })),
+        fetch("/api/gamification/badges").then((r) => (r.ok ? r.json() : { earned: [] })),
+        fetch("/api/mood").then((r) => (r.ok ? r.json() : { todayLog: null })),
+      ]);
+      setOverview(o);
+      setAnalytics(ax);
+      setTodayTasks(Array.isArray(tt?.tasks) ? tt.tasks.slice(0, 8) : []);
+      setHabits(Array.isArray(h) ? h : []);
+      setLogs(Array.isArray(l) ? l : []);
+      setChallenges(Array.isArray(ch.challenges) ? ch.challenges : []);
+      setTopBadgeTitles(
+        Array.isArray(bd.earned)
+          ? bd.earned.slice(0, 3).map((e: { achievement: { title: string } }) => e.achievement.title)
+          : [],
+      );
+      setMoodToday(
+        mo?.todayLog && typeof mo.todayLog.moodScore === "number"
+          ? { moodScore: mo.todayLog.moodScore }
+          : null,
+      );
+    } catch (err) {
+      console.error("[dashboard-home] load failed", err);
+    } finally {
+      setLoading(false);
+    }
   }, [session?.user?.id]);
 
   useEffect(() => {
@@ -491,56 +496,65 @@ export function DashboardHome() {
 
       {session?.user ? <AiGamePlanCard /> : null}
 
-      {session?.user && overview ? (
+      {session?.user ? (
         <div className="grid gap-4 lg:grid-cols-3">
           <div className="app-card lg:col-span-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Level progress</p>
-            <p className="mt-1 text-lg font-semibold text-text">{levelDisplayName(overview.level)}</p>
-            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-canvas">
-              <div
-                className="h-full rounded-full bg-primary transition-all duration-500"
-                style={{ width: `${Math.round((overview.levelProgress ?? 0) * 100)}%` }}
-              />
-            </div>
-            <p className="mt-2 text-xs text-text-muted">
-              <span className="font-mono text-text">{overview.xp}</span> XP
-              {overview.xpToNext != null && overview.xpToNext > 0 ? (
-                <> · <span className="font-mono">{overview.xpToNext}</span> XP to next</>
-              ) : (
-                <> · max level</>
-              )}
-            </p>
-            {typeof overview.coins === "number" ? (
-              <p className="mt-1 text-xs text-text-muted">
-                🪙 <span className="font-mono font-semibold text-text">{overview.coins}</span> coins
-              </p>
-            ) : null}
-            <div className="mt-4 border-t border-border pt-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Mood check-in</p>
-              {moodToday ? (
-                <p className="mt-2 text-sm text-text">
-                  Logged today: <span className="text-lg">{MOOD_QUICK.find((m) => m.score === moodToday.moodScore)?.emoji ?? "—"}</span>{" "}
-                  <span className="text-text-muted">
-                    {MOOD_QUICK.find((m) => m.score === moodToday.moodScore)?.label ?? ""}
-                  </span>
-                </p>
-              ) : (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {MOOD_QUICK.map((m) => (
-                    <button
-                      key={m.score}
-                      type="button"
-                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-canvas text-lg transition hover:border-primary hover:bg-primary-soft"
-                      aria-label={m.label}
-                      title={m.label}
-                      onClick={requireAuth(() => void logMood(m.score))}
-                    >
-                      {m.emoji}
-                    </button>
-                  ))}
+            {overview ? (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Level progress</p>
+                <p className="mt-1 text-lg font-semibold text-text">{levelDisplayName(overview.level)}</p>
+                <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-canvas">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-500"
+                    style={{ width: `${Math.round((overview.levelProgress ?? 0) * 100)}%` }}
+                  />
                 </div>
-              )}
-            </div>
+                <p className="mt-2 text-xs text-text-muted">
+                  <span className="font-mono text-text">{overview.xp}</span> XP
+                  {overview.xpToNext != null && overview.xpToNext > 0 ? (
+                    <> · <span className="font-mono">{overview.xpToNext}</span> XP to next</>
+                  ) : (
+                    <> · max level</>
+                  )}
+                </p>
+                {typeof overview.coins === "number" ? (
+                  <p className="mt-1 text-xs text-text-muted">
+                    🪙 <span className="font-mono font-semibold text-text">{overview.coins}</span> coins
+                  </p>
+                ) : null}
+                <div className="mt-4 border-t border-border pt-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Mood check-in</p>
+                  {moodToday ? (
+                    <p className="mt-2 text-sm text-text">
+                      Logged today: <span className="text-lg">{MOOD_QUICK.find((m) => m.score === moodToday.moodScore)?.emoji ?? "—"}</span>{" "}
+                      <span className="text-text-muted">
+                        {MOOD_QUICK.find((m) => m.score === moodToday.moodScore)?.label ?? ""}
+                      </span>
+                    </p>
+                  ) : (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {MOOD_QUICK.map((m) => (
+                        <button
+                          key={m.score}
+                          type="button"
+                          className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-canvas text-lg transition hover:border-primary hover:bg-primary-soft"
+                          aria-label={m.label}
+                          title={m.label}
+                          onClick={requireAuth(() => void logMood(m.score))}
+                        >
+                          {m.emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="space-y-3">
+                <SkeletonCard lines={2} />
+                <SkeletonCard lines={2} />
+              </div>
+            )}
           </div>
           <div className="app-card lg:col-span-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -549,8 +563,17 @@ export function DashboardHome() {
                 Spend coins →
               </Link>
             </div>
-            {challenges.length === 0 ? (
-              <p className="mt-3 text-sm text-text-muted">Loading challenges…</p>
+            {loading && challenges.length === 0 ? (
+              <div className="mt-3 space-y-2">
+                <SkeletonCard lines={2} />
+                <SkeletonCard lines={2} />
+                <SkeletonCard lines={2} />
+              </div>
+            ) : challenges.length === 0 ? (
+              <p className="mt-3 text-sm text-text-muted">
+                No challenges loaded yet. Refresh the page — if this persists, check that you&apos;re signed in and the
+                server can reach the database.
+              </p>
             ) : (
               <ul className="mt-3 space-y-2">
                 {challenges.map((c) => (
@@ -560,7 +583,7 @@ export function DashboardHome() {
                   >
                     <span className={c.completed ? "font-medium text-success" : "text-text"}>{c.text}</span>
                     <span className="shrink-0 font-mono text-[11px] text-text-muted">
-                      {c.progress}/{c.targetCount}
+                      +{c.xpReward} XP · {c.progress}/{c.targetCount}
                       {c.completed ? " ✓" : ""}
                     </span>
                   </li>

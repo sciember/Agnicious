@@ -46,13 +46,27 @@ export default function AICoachPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ prompt: trimmed, detailReport }),
         });
-        const data = await res.json();
+        const data = (await res.json()) as {
+          response?: string;
+          error?: string;
+          code?: string;
+          details?: string;
+        };
         if (!res.ok) {
-          toast.error(data?.error ?? "Coach unavailable.");
-          setMessages((m) => [
-            ...m,
-            { role: "assistant", text: "I couldn’t reach the coach right now. Try again soon." },
-          ]);
+          const missingKey =
+            data?.code === "GROQ_KEY_MISSING" ||
+            (typeof data?.error === "string" && data.error.includes("GROQ_API_KEY"));
+          const userMsg = missingKey
+            ? "AI Coach needs GROQ_API_KEY configured in environment variables"
+            : typeof data?.error === "string"
+              ? data.error
+              : "Coach request failed.";
+          toast.error(userMsg);
+          const assistantDetail =
+            typeof data?.details === "string" && data.details.length > 0
+              ? `${userMsg}\n\n(${data.details})`
+              : userMsg;
+          setMessages((m) => [...m, { role: "assistant", text: assistantDetail }]);
           return;
         }
         setMessages((m) => [...m, { role: "assistant", text: data.response ?? "" }]);
