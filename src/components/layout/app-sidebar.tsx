@@ -12,6 +12,7 @@ import {
   ClipboardList,
   LayoutDashboard,
   ListChecks,
+  Settings,
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -125,6 +126,9 @@ export function AppSidebar() {
       </nav>
 
       <div className="mt-auto border-t border-border p-3">
+        <div className="mb-3">
+          <NavLink href="/settings" label="Settings" icon={Settings} />
+        </div>
         {session?.user ? (
           <div className="mb-3 flex items-center gap-3 rounded-xl border border-border bg-canvas px-3 py-2">
             <div className="relative h-10 w-10 shrink-0">

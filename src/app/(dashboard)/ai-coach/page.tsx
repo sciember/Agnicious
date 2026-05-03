@@ -2,8 +2,6 @@
 
 import { useCallback, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Link from "next/link";
-import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
 import { Send } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -22,7 +20,6 @@ const chips: { label: string; detail?: boolean }[] = [
 ];
 
 export default function AICoachPage() {
-  const { data: session } = useSession();
   const { requireAuth } = useAuthGate();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatTurn[]>([]);
@@ -37,10 +34,6 @@ export default function AICoachPage() {
     async (text: string, opts?: { detailReport?: boolean }) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      if (!session?.user) {
-        toast.error("Sign in to chat with the coach.");
-        return;
-      }
       const detailReport =
         opts?.detailReport ??
         /analyze my productivity|full weekly report|weekly report|deep dive/i.test(trimmed);
@@ -71,19 +64,8 @@ export default function AICoachPage() {
         setTimeout(scrollToBottom, 50);
       }
     },
-    [session?.user, scrollToBottom],
+    [scrollToBottom],
   );
-
-  if (!session?.user) {
-    return (
-      <div className="app-card flex flex-col items-center justify-center py-16 text-center">
-        <p className="text-text-muted">Sign in to use the AI coach.</p>
-        <Link href="/sign-in" className="btn-primary mt-6">
-          Sign In
-        </Link>
-      </div>
-    );
-  }
 
   return (
     <div className="flex min-h-[calc(100dvh-8rem)] flex-col">
@@ -155,7 +137,7 @@ export default function AICoachPage() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  void send(input);
+                  requireAuth(() => void send(input))();
                 }
               }}
             />

@@ -8,9 +8,25 @@ export async function GET() {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const feed = await prisma.activity.findMany({
+    select: {
+      id: true,
+      message: true,
+      createdAt: true,
+      user: { select: { id: true, displayName: true, name: true } },
+    },
     orderBy: { createdAt: "desc" },
     take: 20,
   });
 
-  return NextResponse.json(feed);
+  return NextResponse.json(
+    feed.map((item) => ({
+      id: item.id,
+      message: item.message.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "hidden"),
+      createdAt: item.createdAt,
+      user: {
+        id: item.user.id,
+        displayName: item.user.displayName ?? item.user.name ?? "User",
+      },
+    })),
+  );
 }

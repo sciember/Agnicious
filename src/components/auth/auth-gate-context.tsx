@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 type AuthGateContextValue = {
   authModalOpen: boolean;
   setAuthModalOpen: (open: boolean) => void;
+  openAuthModal: () => void;
   requireAuth: (action: () => void | Promise<void>) => () => void;
 };
 
@@ -14,6 +15,7 @@ const AuthGateContext = createContext<AuthGateContextValue | null>(null);
 export function AuthGateProvider({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const openAuthModal = useCallback(() => setAuthModalOpen(true), []);
 
   const requireAuth = useCallback(
     (action: () => void | Promise<void>) => () => {
@@ -28,8 +30,8 @@ export function AuthGateProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ authModalOpen, setAuthModalOpen, requireAuth }),
-    [authModalOpen, requireAuth],
+    () => ({ authModalOpen, setAuthModalOpen, openAuthModal, requireAuth }),
+    [authModalOpen, openAuthModal, requireAuth],
   );
 
   return <AuthGateContext.Provider value={value}>{children}</AuthGateContext.Provider>;

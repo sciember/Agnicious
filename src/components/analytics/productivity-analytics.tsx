@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { format, subDays } from "date-fns";
 import { motion } from "framer-motion";
-import Link from "next/link";
 import { useSession } from "next-auth/react";
 import {
   Area,
@@ -249,17 +248,6 @@ export function ProductivityAnalytics() {
   }, [report, days]);
 
   const insights = useMemo(() => insightCards(overview, report, range), [overview, report, range]);
-
-  if (!session?.user && !loading) {
-    return (
-      <div className="app-card py-16 text-center">
-        <p className="text-text-muted">Sign in for productivity analytics.</p>
-        <Link href="/sign-in" className="btn-primary mt-4 inline-block">
-          Sign In
-        </Link>
-      </div>
-    );
-  }
 
   const focusHrs = Math.round((overview?.pomodoro.totalMinutesToday ?? 0) / 60);
 

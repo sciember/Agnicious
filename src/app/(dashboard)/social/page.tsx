@@ -2,21 +2,21 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import Link from "next/link";
 import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
 import clsx from "clsx";
+import { useAuthGate } from "@/components/auth/auth-gate-context";
 
 type Friend = {
   id: string;
   status: "PENDING" | "ACCEPTED" | "BLOCKED";
   requesterId: string;
   addresseeId: string;
-  requester: { id: string; name: string | null; email: string };
-  addressee: { id: string; name: string | null; email: string };
+  requester: { id: string; displayName: string };
+  addressee: { id: string; displayName: string };
 };
 
-type Feed = { id: string; message: string; createdAt: string };
+type Feed = { id: string; message: string; createdAt: string; user: { id: string; displayName: string } };
 type Challenge = {
   id: string;
   title: string;
@@ -24,14 +24,15 @@ type Challenge = {
   joined: boolean;
   progress: number;
   completedAt: string | null;
+  participants: Array<{ id: string; displayName: string }>;
 };
 
 type Leader = {
   id: string;
-  name: string | null;
+  displayName: string;
   image: string | null;
   xp: number;
-  level: number;
+  streakCount: number;
 };
 
 function initials(name: string | null | undefined, fallback: string) {
@@ -44,6 +45,7 @@ function initials(name: string | null | undefined, fallback: string) {
 
 export default function SocialPage() {
   const { data: session } = useSession();
+  const { requireAuth } = useAuthGate();
   const [currentUserId, setCurrentUserId] = useState("");
   const [targetEmail, setTargetEmail] = useState("");
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -145,21 +147,10 @@ export default function SocialPage() {
     () =>
       feed.map((item) => ({
         ...item,
-        bubble: item.message.slice(0, 2).toUpperCase(),
+        bubble: initials(item.user.displayName, item.id),
       })),
     [feed],
   );
-
-  if (!session?.user && !loading) {
-    return (
-      <div className="app-card flex flex-col items-center justify-center py-16 text-center">
-        <p className="text-text-muted">Sign in to connect with friends and challenges.</p>
-        <Link href="/sign-in" className="btn-primary mt-6">
-          Sign In
-        </Link>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-8">
@@ -178,7 +169,7 @@ export default function SocialPage() {
             placeholder="friend@email.com"
             className="input-field"
           />
-          <button type="button" className="btn-primary w-full sm:w-auto" onClick={sendRequest} disabled={busy}>
+          <button type="button" className="btn-primary w-full sm:w-auto" onClick={requireAuth(() => void sendRequest())} disabled={busy}>
             {busy ? "Sending…" : "Send Request"}
           </button>
           <div className="space-y-2 border-t border-border pt-4">
@@ -192,7 +183,7 @@ export default function SocialPage() {
                   className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-canvas px-3 py-2 text-sm"
                 >
                   <span className="text-text">
-                    {friend.requester.name ?? friend.requester.email} ↔ {friend.addressee.name ?? friend.addressee.email}
+                    {friend.requester.displayName} ↔ {friend.addressee.displayName}
                   </span>
                   <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-semibold text-primary">
                     {friend.status}
@@ -201,7 +192,7 @@ export default function SocialPage() {
                     <button
                       type="button"
                       className="btn-ghost text-xs"
-                      onClick={() => void acceptRequest(friend.id)}
+                      onClick={requireAuth(() => void acceptRequest(friend.id))}
                       disabled={busy}
                     >
                       Accept
@@ -227,7 +218,8 @@ export default function SocialPage() {
                     {item.bubble}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-text">{item.message}</p>
+                    <p className="text-sm font-medium text-text">{item.user.displayName}</p>
+                    <p className="text-sm text-text-muted">{item.message}</p>
                     <p className="mt-1 text-xs text-text-muted">{new Date(item.createdAt).toLocaleString()}</p>
                   </div>
                 </div>
@@ -258,6 +250,12 @@ export default function SocialPage() {
                   </div>
                   <span className="rounded-full bg-canvas px-2 py-1 text-[11px] text-text-muted">Community</span>
                 </div>
+                <p className="text-xs text-text-muted">
+                  Participants:{" "}
+                  {challenge.participants.length > 0
+                    ? challenge.participants.map((participant) => participant.displayName).join(", ")
+                    : "No participants yet"}
+                </p>
                 <div>
                   <div className="mb-1 flex justify-between text-xs text-text-muted">
                     <span>Progress</span>
@@ -279,7 +277,7 @@ export default function SocialPage() {
                     type="button"
                     className="btn-primary w-fit"
                     disabled={busy}
-                    onClick={() => void joinChallenge(challenge.id)}
+                    onClick={requireAuth(() => void joinChallenge(challenge.id))}
                   >
                     Join
                   </button>
@@ -333,13 +331,13 @@ export default function SocialPage() {
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={row.image} alt="" className="h-full w-full object-cover" />
                           ) : (
-                            initials(row.name, row.id)
+                            initials(row.displayName, row.id)
                           )}
                         </div>
-                        <span className="font-medium text-text">{row.name ?? "User"}</span>
+                        <span className="font-medium text-text">{row.displayName}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 font-mono text-text-muted">—</td>
+                    <td className="px-4 py-3 font-mono text-text">{row.streakCount}</td>
                     <td className="px-4 py-3 font-mono text-text">{row.xp}</td>
                   </tr>
                 );

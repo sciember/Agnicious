@@ -23,6 +23,14 @@ export async function GET() {
   );
 
   const challenges = await prisma.challenge.findMany({
+    include: {
+      participants: {
+        select: {
+          user: { select: { id: true, displayName: true, name: true } },
+        },
+        take: 5,
+      },
+    },
     orderBy: { durationDays: "asc" },
   });
   const joined = await prisma.userChallenge.findMany({
@@ -36,6 +44,10 @@ export async function GET() {
       joined: joinedIds.has(c.id),
       progress: joined.find((j) => j.challengeId === c.id)?.progressDays ?? 0,
       completedAt: joined.find((j) => j.challengeId === c.id)?.completedAt ?? null,
+      participants: c.participants.map((participant) => ({
+        id: participant.user.id,
+        displayName: participant.user.displayName ?? participant.user.name ?? "User",
+      })),
     })),
   );
 }

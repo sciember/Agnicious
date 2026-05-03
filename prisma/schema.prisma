@@ -48,6 +48,7 @@ model User {
   emailVerified     DateTime?
   passwordHash      String?
   name              String?
+  displayName       String?
   image             String?
   timezone          String      @default("UTC")
   level             Int         @default(1)

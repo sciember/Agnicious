@@ -13,13 +13,27 @@ export async function GET() {
       OR: [{ requesterId: session.user.id }, { addresseeId: session.user.id }],
     },
     include: {
-      requester: { select: { id: true, name: true, email: true, image: true } },
-      addressee: { select: { id: true, name: true, email: true, image: true } },
+      requester: { select: { id: true, displayName: true, name: true, image: true } },
+      addressee: { select: { id: true, displayName: true, name: true, image: true } },
     },
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json(friends);
+  return NextResponse.json(
+    friends.map((friend) => ({
+      ...friend,
+      requester: {
+        id: friend.requester.id,
+        displayName: friend.requester.displayName ?? friend.requester.name ?? "User",
+        image: friend.requester.image,
+      },
+      addressee: {
+        id: friend.addressee.id,
+        displayName: friend.addressee.displayName ?? friend.addressee.name ?? "User",
+        image: friend.addressee.image,
+      },
+    })),
+  );
 }
 
 export async function POST(request: Request) {
@@ -58,7 +72,7 @@ export async function POST(request: Request) {
     await prisma.activity.create({
       data: {
         userId: session.user.id,
-        message: `Sent friend request to ${target.name ?? target.email}`,
+        message: `Sent friend request to ${target.displayName ?? target.name ?? "a user"}`,
         metadata: { targetUserId: target.id },
       },
     });

@@ -376,10 +376,10 @@ export function DashboardHome() {
                 value={quickTask}
                 onChange={(e) => setQuickTask(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") void quickAddTask();
+                  if (e.key === "Enter") requireAuth(() => void quickAddTask())();
                 }}
               />
-              <button type="button" className="btn-primary shrink-0 px-4 text-sm" onClick={() => void quickAddTask()}>
+              <button type="button" className="btn-primary shrink-0 px-4 text-sm" onClick={requireAuth(() => void quickAddTask())}>
                 Add
               </button>
             </div>
@@ -406,11 +406,8 @@ export function DashboardHome() {
       {!loading && !session?.user ? (
         <div className="app-card flex flex-col items-center justify-center py-16 text-center">
           <p className="max-w-md text-text-muted">
-            Sign in to sync habits, streaks, and XP. You can browse the app — actions will prompt you to authenticate.
+            Explore everything freely. We&apos;ll ask you to sign in only when you try to save data.
           </p>
-          <Link href="/sign-in" className="btn-primary mt-6">
-            Sign In
-          </Link>
         </div>
       ) : null}
 
@@ -427,7 +424,16 @@ export function DashboardHome() {
           ) : habits.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-14 text-center">
               <p className="text-text-muted">No habits yet. Create one to start your streak.</p>
-              <Link href="/habits" className="btn-primary mt-4">
+              <Link
+                href="/habits"
+                className="btn-primary mt-4"
+                onClick={(e) => {
+                  if (!session?.user) {
+                    e.preventDefault();
+                    requireAuth(() => router.push("/habits"))();
+                  }
+                }}
+              >
                 Create habit
               </Link>
             </div>

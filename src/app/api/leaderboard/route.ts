@@ -8,10 +8,18 @@ export async function GET() {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const leaders = await prisma.user.findMany({
-    select: { id: true, name: true, image: true, xp: true, level: true },
-    orderBy: [{ xp: "desc" }, { level: "desc" }],
+    select: { id: true, displayName: true, name: true, image: true, xp: true, streaks: { select: { currentCount: true } } },
+    orderBy: [{ xp: "desc" }],
     take: 10,
   });
 
-  return NextResponse.json(leaders);
+  return NextResponse.json(
+    leaders.map((leader) => ({
+      id: leader.id,
+      displayName: leader.displayName ?? leader.name ?? "User",
+      image: leader.image,
+      xp: leader.xp,
+      streakCount: leader.streaks.reduce((max, streak) => Math.max(max, streak.currentCount), 0),
+    })),
+  );
 }

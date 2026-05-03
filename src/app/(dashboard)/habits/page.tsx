@@ -404,19 +404,7 @@ export default function HabitsPage() {
         </div>
       ) : null}
 
-      {!loading && !session?.user ? (
-        <div className="app-card flex flex-col items-center justify-center py-16 text-center">
-          <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary-soft text-4xl" aria-hidden>
-            🔒
-          </div>
-          <p className="max-w-sm text-text-muted">Sign in to create and track habits.</p>
-          <Link href="/sign-in" className="btn-primary mt-6">
-            Sign In
-          </Link>
-        </div>
-      ) : null}
-
-      {!loading && session?.user && habits.length === 0 ? (
+      {!loading && habits.length === 0 ? (
         <div className="app-card flex flex-col items-center justify-center py-20 text-center">
           <div
             className="mb-6 flex h-28 w-28 items-center justify-center rounded-2xl border border-dashed border-primary/40 bg-primary-soft/40"
@@ -436,7 +424,6 @@ export default function HabitsPage() {
 
       <div className="space-y-3">
         {!loading &&
-          session?.user &&
           habits.map((habit) => {
             const meta = parseHabitUiMeta(habit.description);
             const dots = weekDots(habit.id);
@@ -474,9 +461,7 @@ export default function HabitsPage() {
                       <button
                         type="button"
                         className="btn-primary"
-                        onClick={() =>
-                          void saveEdit(habit.id, habit.description)
-                        }
+                        onClick={requireAuth(() => void saveEdit(habit.id, habit.description))}
                       >
                         Save
                       </button>
@@ -566,7 +551,7 @@ export default function HabitsPage() {
                             <button
                               type="button"
                               className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text hover:bg-canvas"
-                              onClick={() => void deleteHabit(habit.id)}
+                              onClick={requireAuth(() => void deleteHabit(habit.id))}
                             >
                               <Trash2 className="h-4 w-4" /> Delete
                             </button>
@@ -582,7 +567,7 @@ export default function HabitsPage() {
                               className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text hover:bg-canvas"
                               onClick={() => {
                                 setMenuOpenId(null);
-                                void applyFreeze(habit.id);
+                                requireAuth(() => void applyFreeze(habit.id))();
                               }}
                             >
                               <Snowflake className="h-4 w-4" /> Use streak freeze

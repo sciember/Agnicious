@@ -1,11 +1,35 @@
 "use client";
 
+import { FormEvent, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import Link from "next/link";
+import { signIn } from "next-auth/react";
+import { X } from "lucide-react";
 import { useAuthGate } from "./auth-gate-context";
 
 export function AuthModal() {
   const { authModalOpen, setAuthModalOpen } = useAuthGate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function onEmailSignIn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setBusy(true);
+    const result = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
+      callbackUrl: "/",
+    });
+    setBusy(false);
+    if (result?.error) {
+      setError("Invalid credentials");
+      return;
+    }
+    setAuthModalOpen(false);
+  }
 
   return (
     <AnimatePresence>
@@ -16,12 +40,7 @@ export function AuthModal() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-            aria-label="Close"
-            onClick={() => setAuthModalOpen(false)}
-          />
+          <button type="button" className="absolute inset-0 bg-black/60 backdrop-blur-md" aria-label="Close" onClick={() => setAuthModalOpen(false)} />
           <motion.div
             role="dialog"
             aria-modal="true"
@@ -32,27 +51,52 @@ export function AuthModal() {
             exit={{ opacity: 0, y: 8, scale: 0.98 }}
             transition={{ duration: 0.2 }}
           >
+            <button
+              type="button"
+              aria-label="Close auth modal"
+              className="absolute right-4 top-4 rounded-full p-1 text-text-muted hover:bg-canvas hover:text-text"
+              onClick={() => setAuthModalOpen(false)}
+            >
+              <X className="h-4 w-4" />
+            </button>
             <h2 id="auth-modal-title" className="text-xl font-semibold text-text">
               Sign in to continue
             </h2>
-            <p className="mt-2 text-sm text-text-muted">
-              Track habits, join challenges, and chat with your AI coach — sign in to sync your progress.
-            </p>
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <p className="mt-2 text-sm text-text-muted">Join free to track habits & tasks</p>
+            <div className="mt-5 space-y-3">
               <button
                 type="button"
-                className="btn-ghost order-2 sm:order-1"
-                onClick={() => setAuthModalOpen(false)}
+                className="btn-primary w-full"
+                disabled={busy}
+                onClick={() => void signIn("google", { callbackUrl: "/" })}
               >
-                Not now
+                Continue with Google
               </button>
-              <Link
-                href="/sign-in"
-                className="btn-primary order-1 text-center sm:order-2"
-                onClick={() => setAuthModalOpen(false)}
-              >
-                Go to sign in
-              </Link>
+              <form className="space-y-2" onSubmit={onEmailSignIn}>
+                <input
+                  className="input-field"
+                  type="email"
+                  placeholder="Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={busy}
+                />
+                <input
+                  className="input-field"
+                  type="password"
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={busy}
+                />
+                <button type="submit" className="btn-ghost w-full" disabled={busy}>
+                  Continue with Email
+                </button>
+              </form>
+              {error ? <p className="text-sm text-danger">{error}</p> : null}
+              <button type="button" className="btn-ghost w-full" onClick={() => setAuthModalOpen(false)}>
+                Cancel
+              </button>
             </div>
           </motion.div>
         </motion.div>

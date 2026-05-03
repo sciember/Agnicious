@@ -13,7 +13,6 @@ import {
   subMonths,
 } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
-import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useSession } from "next-auth/react";
 import clsx from "clsx";
@@ -113,17 +112,6 @@ export function CalendarPageClient() {
   const selectedLogs = selected
     ? logs.filter((l) => isSameDay(new Date(l.date), selected))
     : [];
-
-  if (!session?.user && !loading) {
-    return (
-      <div className="app-card flex flex-col items-center justify-center py-16 text-center">
-        <p className="text-text-muted">Sign in to view your calendar.</p>
-        <Link href="/sign-in" className="btn-primary mt-6">
-          Sign In
-        </Link>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">

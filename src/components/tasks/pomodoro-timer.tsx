@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { useSession } from "next-auth/react";
 import clsx from "clsx";
+import { useAuthGate } from "@/components/auth/auth-gate-context";
 
 type Mode = "focus" | "short" | "long";
 
@@ -24,6 +26,8 @@ export function PomodoroTimer(props: {
   onSessionComplete?: () => void;
 }) {
   const { linkedTaskId, linkedTaskTitle, onSessionComplete } = props;
+  const { data: session } = useSession();
+  const { openAuthModal } = useAuthGate();
   const [mode, setMode] = useState<Mode>("focus");
   const [remaining, setRemaining] = useState(MODE_SEC.focus);
   const [running, setRunning] = useState(false);
@@ -116,6 +120,10 @@ export function PomodoroTimer(props: {
   }, [running, completeRound]);
 
   function startPause() {
+    if (!session?.user && !running) {
+      openAuthModal();
+      return;
+    }
     if (!running && remaining === MODE_SEC[mode]) {
       if (typeof Notification !== "undefined" && Notification.permission === "default") {
         void Notification.requestPermission();

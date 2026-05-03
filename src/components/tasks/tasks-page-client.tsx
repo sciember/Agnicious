@@ -10,6 +10,7 @@ import { ChevronLeft, ChevronRight, MoreHorizontal, Trash2, Pencil } from "lucid
 import clsx from "clsx";
 import { PomodoroTimer } from "./pomodoro-timer";
 import { parseHabitUiMeta } from "@/lib/habit-ui-meta";
+import { useAuthGate } from "@/components/auth/auth-gate-context";
 
 type Project = {
   id: string;
@@ -47,6 +48,7 @@ function priorityLabel(p: string) {
 
 export function TasksPageClient() {
   const { data: session } = useSession();
+  const { requireAuth } = useAuthGate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [habits, setHabits] = useState<HabitMini[]>([]);
@@ -354,17 +356,6 @@ export function TasksPageClient() {
     void loadProjects();
   }
 
-  if (!session?.user) {
-    return (
-      <div className="app-card py-16 text-center">
-        <p className="text-text-muted">Sign in to manage tasks.</p>
-        <Link href="/sign-in" className="btn-primary mt-4 inline-block">
-          Sign In
-        </Link>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-6 xl:flex-row">
       {/* Left — projects */}
@@ -373,7 +364,7 @@ export function TasksPageClient() {
           <button
             type="button"
             className="btn-primary w-full text-sm"
-            onClick={() => setProjectFormOpen((v) => !v)}
+            onClick={requireAuth(() => setProjectFormOpen((v) => !v))}
           >
             + New Project
           </button>
@@ -393,7 +384,7 @@ export function TasksPageClient() {
                   onChange={(e) => setNewProject((s) => ({ ...s, icon: e.target.value }))}
                 />
                 <div className="flex gap-2">
-                  <button type="button" className="btn-primary flex-1 text-xs" onClick={() => void createProject()}>
+                  <button type="button" className="btn-primary flex-1 text-xs" onClick={requireAuth(() => void createProject())}>
                     Save
                   </button>
                   <button type="button" className="btn-ghost flex-1 text-xs" onClick={() => setProjectFormOpen(false)}>
@@ -479,7 +470,7 @@ export function TasksPageClient() {
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
-          <button type="button" className="btn-primary" onClick={() => setFormOpen(true)}>
+          <button type="button" className="btn-primary" onClick={requireAuth(() => setFormOpen(true))}>
             Add Task
           </button>
         </div>
@@ -570,7 +561,7 @@ export function TasksPageClient() {
                 onChange={(e) => setNewTask((s) => ({ ...s, estimatedMins: e.target.value }))}
               />
               <div className="flex gap-2">
-                <button type="button" className="btn-primary" onClick={() => void createTask()}>
+                <button type="button" className="btn-primary" onClick={requireAuth(() => void createTask())}>
                   Save
                 </button>
                 <button
@@ -613,7 +604,7 @@ export function TasksPageClient() {
                               ? "border-success bg-success text-background"
                               : "border-border",
                           )}
-                          onClick={() => void toggleDone(task)}
+                          onClick={requireAuth(() => void toggleDone(task))}
                           aria-label="Toggle done"
                         >
                           {task.status === "done" ? "✓" : ""}
@@ -710,7 +701,7 @@ export function TasksPageClient() {
                                 <button
                                   type="button"
                                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-danger"
-                                  onClick={() => void deleteTask(task.id)}
+                                  onClick={requireAuth(() => void deleteTask(task.id))}
                                 >
                                   <Trash2 className="h-3.5 w-3.5" /> Delete
                                 </button>
