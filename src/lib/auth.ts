@@ -5,6 +5,20 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import { prisma } from "@/lib/prisma";
 
+async function safeGetUsername(userId: string | undefined | null): Promise<string | null> {
+  if (!userId) return null;
+  try {
+    const u = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { username: true },
+    });
+    return u?.username ?? null;
+  } catch {
+    // Never block auth flow because of profile enrichment.
+    return null;
+  }
+}
+
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   adapter: PrismaAdapter(prisma),
@@ -43,20 +57,12 @@ export const authOptions: NextAuthOptions = {
       return baseUrl;
     },
     async jwt({ token, user, trigger }) {
-      if (user) {
+      if (user?.id) {
         token.sub = user.id;
-        const u = await prisma.user.findUnique({
-          where: { id: user.id },
-          select: { username: true },
-        });
-        token.username = u?.username ?? null;
+        token.username = await safeGetUsername(user.id);
       }
       if (trigger === "update" && token.sub) {
-        const u = await prisma.user.findUnique({
-          where: { id: token.sub },
-          select: { username: true },
-        });
-        token.username = u?.username ?? null;
+        token.username = await safeGetUsername(token.sub);
       }
       return token;
     },
@@ -66,11 +72,7 @@ export const authOptions: NextAuthOptions = {
         if (typeof token.username === "string" || token.username === null) {
           session.user.username = token.username;
         } else {
-          const u = await prisma.user.findUnique({
-            where: { id: token.sub },
-            select: { username: true },
-          });
-          session.user.username = u?.username ?? null;
+          session.user.username = await safeGetUsername(token.sub);
         }
       }
       return session;
