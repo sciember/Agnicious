@@ -34,6 +34,7 @@ export async function tryAwardBadge(
     await prisma.user.update({
       where: { id: userId },
       data: { level: levelFromXp(u.xp) },
+      select: { id: true },
     });
   }
 
@@ -49,5 +50,6 @@ export async function refreshUserLevelFromXp(userId: string) {
   await prisma.user.update({
     where: { id: userId },
     data: { level: levelFromXp(u.xp) },
+    select: { id: true },
   });
 }

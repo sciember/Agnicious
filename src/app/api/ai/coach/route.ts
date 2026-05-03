@@ -94,16 +94,14 @@ export async function POST(request: Request) {
       data.choices?.[0]?.message?.content ??
       "Focus on one keystone habit daily and track it right after completion.";
 
-    await prisma.user.update({
+    // Narrow `select` so Prisma does not RETURNING missing columns (e.g. `coins` if migrations lag on prod).
+    const afterTurn = await prisma.user.update({
       where: { id: session.user.id },
       data: { aiCoachTurns: { increment: 1 } },
-    });
-    const turns = await prisma.user.findUnique({
-      where: { id: session.user.id },
       select: { aiCoachTurns: true },
     });
     let newBadge: { code: string; title: string; description: string } | null = null;
-    if ((turns?.aiCoachTurns ?? 0) >= 10) {
+    if (afterTurn.aiCoachTurns >= 10) {
       const def = BADGE_BY_CODE["AI_CURIOUS"];
       if (def) {
         newBadge = await tryAwardBadge(session.user.id, def.code, def.title, def.description, def.xpReward);
