@@ -19,6 +19,21 @@ async function safeGetUsername(userId: string | undefined | null): Promise<strin
   }
 }
 
+async function loadUserJwtFields(userId: string) {
+  try {
+    const u = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { username: true, onboardingCompleted: true },
+    });
+    return {
+      username: u?.username ?? null,
+      onboardingCompleted: Boolean(u?.onboardingCompleted),
+    };
+  } catch {
+    return { username: null as string | null, onboardingCompleted: true };
+  }
+}
+
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   adapter: PrismaAdapter(prisma),
@@ -59,10 +74,14 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user, trigger }) {
       if (user?.id) {
         token.sub = user.id;
-        token.username = await safeGetUsername(user.id);
+        const fields = await loadUserJwtFields(user.id);
+        token.username = fields.username;
+        token.onboardingCompleted = fields.onboardingCompleted;
       }
       if (trigger === "update" && token.sub) {
-        token.username = await safeGetUsername(token.sub);
+        const fields = await loadUserJwtFields(token.sub);
+        token.username = fields.username;
+        token.onboardingCompleted = fields.onboardingCompleted;
       }
       return token;
     },
@@ -74,6 +93,7 @@ export const authOptions: NextAuthOptions = {
         } else {
           session.user.username = await safeGetUsername(token.sub);
         }
+        session.user.onboardingCompleted = token.onboardingCompleted ?? true;
       }
       return session;
     },

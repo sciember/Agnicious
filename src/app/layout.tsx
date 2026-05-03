@@ -27,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${sora.variable} ${dmMono.variable} h-full antialiased`}>
+    <html lang="en" suppressHydrationWarning className={`${sora.variable} ${dmMono.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-background text-text font-sans">
         <Providers>{children}</Providers>
       </body>

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import { BarChart3, CalendarDays, ClipboardList, Home, ListChecks, Users } from "lucide-react";
 import clsx from "clsx";
 
@@ -39,12 +40,26 @@ export function MobileTabBar() {
             type="button"
             onClick={() => router.push(tab.href)}
             className={clsx(
-              "flex flex-1 cursor-pointer flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
+              "relative flex flex-1 cursor-pointer flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
               active ? "text-primary" : "text-text-muted",
             )}
           >
-            <Icon className="h-5 w-5" strokeWidth={active ? 2.25 : 2} />
-            {tab.label}
+            {active ? (
+              <motion.span
+                layoutId="tabbar-pill"
+                className="absolute inset-x-1 top-1 -z-0 rounded-2xl bg-primary/15"
+                transition={{ type: "spring", stiffness: 420, damping: 32 }}
+                style={{ bottom: "0.25rem" }}
+              />
+            ) : null}
+            <motion.span
+              className="relative z-10 flex flex-col items-center gap-0.5"
+              animate={active ? { y: [0, -3, 0] } : { y: 0 }}
+              transition={{ type: "spring", stiffness: 500, damping: 18 }}
+            >
+              <Icon className="h-5 w-5" strokeWidth={active ? 2.25 : 2} />
+              {tab.label}
+            </motion.span>
           </button>
         );
       })}

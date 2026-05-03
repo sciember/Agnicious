@@ -15,7 +15,10 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { useAuthModal } from "@/components/auth/auth-modal-context";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SkeletonCard } from "@/components/ui/skeleton-card";
+import { fireHabitConfetti } from "@/lib/confetti-burst";
 import { parseHabitUiMeta, serializeHabitUiMeta } from "@/lib/habit-ui-meta";
 
 type Habit = {
@@ -164,7 +167,7 @@ export default function HabitsPage() {
     void load();
   }
 
-  async function logDone(habitId: string) {
+  async function logDone(habitId: string, sourceEl: HTMLElement | null) {
     const dateIso = new Date().toISOString();
     const optimisticLog: LogRow = { habitId, date: dateIso, status: "DONE" };
     const prevLogs = logs;
@@ -195,6 +198,7 @@ export default function HabitsPage() {
       ),
       { habitId: data.habitId, date: data.date, status: data.status },
     ]);
+    fireHabitConfetti(sourceEl);
     toast.success("Habit logged! 🔥 Keep it up");
     void load();
   }
@@ -399,27 +403,19 @@ export default function HabitsPage() {
 
       {loading ? (
         <div className="space-y-3">
-          <Skeleton className="h-28 w-full" />
-          <Skeleton className="h-28 w-full" />
+          <SkeletonCard className="h-28 w-full" lines={2} />
+          <SkeletonCard className="h-28 w-full" lines={2} />
         </div>
       ) : null}
 
       {!loading && habits.length === 0 ? (
-        <div className="app-card flex flex-col items-center justify-center py-20 text-center">
-          <div
-            className="mb-6 flex h-28 w-28 items-center justify-center rounded-2xl border border-dashed border-primary/40 bg-primary-soft/40"
-            aria-hidden
-          >
-            <span className="text-5xl">🌱</span>
-          </div>
-          <h2 className="text-lg font-semibold text-text">Create your first habit</h2>
-          <p className="mt-2 max-w-md text-sm text-text-muted">
-            Small steps compound. Pick one habit, keep it visible, and log it daily.
-          </p>
-          <motion.button type="button" className="btn-primary mt-6 px-6" whileTap={{ scale: 0.98 }} onClick={openNewForm}>
-            + New Habit
-          </motion.button>
-        </div>
+        <EmptyState
+          illustration="journey"
+          title="Your journey starts here"
+          description="Small steps compound. Pick one habit, keep it visible, and log it daily."
+          ctaLabel="+ Add your first habit"
+          onCta={openNewForm}
+        />
       ) : null}
 
       <div className="space-y-3">
@@ -521,7 +517,9 @@ export default function HabitsPage() {
                         whileTap={{ scale: 0.9 }}
                         className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-canvas text-lg text-primary hover:bg-primary-soft disabled:opacity-40"
                         disabled={doneToday}
-                        onClick={requireAuth(() => void logDone(habit.id))}
+                        onClick={(e) => {
+                          requireAuth(() => void logDone(habit.id, e.currentTarget))();
+                        }}
                         aria-label="Log done"
                       >
                         ✓

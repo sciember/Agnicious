@@ -69,6 +69,11 @@ model User {
   level             Int         @default(1)
   xp                Int         @default(0)
   streakFreezeCount Int         @default(1)
+  /// Onboarding: main goal key (HEALTH, PRODUCTIVITY, LEARNING, MINDFULNESS) or CUSTOM:label
+  onboardingGoal           String?
+  onboardingCompleted      Boolean   @default(false)
+  /// Preferred daily reminder time from onboarding (HH:mm)
+  defaultReminderTime      String?
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 

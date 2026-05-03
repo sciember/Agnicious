@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Design tokens — Agnicious light theme (Tailwind v4 @theme) */
 @theme inline {
   --color-background: #f9fafb;
@@ -65,11 +67,72 @@ html {
   color-scheme: light;
 }
 
+html.dark {
+  color-scheme: dark;
+  --color-background: #0c0e14;
+  --color-canvas: #11141c;
+  --color-surface: #151a24;
+  --color-card: #1a2030;
+  --color-border: #2a3144;
+  --color-border-subtle: #252b3a;
+  --color-text: #f3f4f6;
+  --color-text-muted: #9ca3af;
+  --color-text-subtle: #6b7280;
+  --color-primary-soft: rgba(99, 102, 241, 0.18);
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.35);
+
+  --bg: #0c0e14;
+  --bg-surface: #151a24;
+  --bg-card: #1a2030;
+  --bg-canvas: #11141c;
+  --border: #2a3144;
+  --text: #f3f4f6;
+  --text-muted: #9ca3af;
+  --text-subtle: #6b7280;
+}
+
+html,
+body {
+  transition:
+    background-color 300ms ease,
+    color 300ms ease;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
   min-height: 100%;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.glass-panel {
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 82%, transparent);
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(12px);
+  padding: 1rem 1.25rem;
+  transition:
+    box-shadow 300ms ease,
+    transform 300ms ease;
+}
+
+@media (hover: hover) {
+  .glass-panel:hover {
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+  }
+  html.dark .glass-panel:hover {
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  }
 }
 
 /* Numbers / XP / streaks — apply font-dm-mono or class below */
@@ -78,11 +141,26 @@ body {
 }
 
 .app-card {
-  border-radius: var(--card-radius);
-  border: 1px solid var(--border);
-  background-color: var(--bg-card);
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background-color: color-mix(in srgb, var(--bg-card) 88%, transparent);
   padding: var(--card-padding);
   box-shadow: var(--shadow-card);
+  backdrop-filter: blur(10px);
+  transition:
+    box-shadow 300ms ease,
+    transform 300ms ease,
+    border-color 300ms ease;
+}
+
+@media (hover: hover) {
+  .app-card:hover {
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+  }
+  html.dark .app-card:hover {
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.4);
+  }
 }
 
 .typing-dot {

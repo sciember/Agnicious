@@ -9,6 +9,8 @@ import toast from "react-hot-toast";
 import { ChevronLeft, ChevronRight, MoreHorizontal, Trash2, Pencil } from "lucide-react";
 import clsx from "clsx";
 import { PomodoroTimer } from "./pomodoro-timer";
+import { EmptyState } from "@/components/ui/empty-state";
+import { SkeletonCard } from "@/components/ui/skeleton-card";
 import { parseHabitUiMeta } from "@/lib/habit-ui-meta";
 import { useAuthModal } from "@/components/auth/auth-modal-context";
 
@@ -580,7 +582,18 @@ export function TasksPageClient() {
         </AnimatePresence>
 
         {loading ? (
-          <p className="text-text-muted">Loading…</p>
+          <div className="space-y-4">
+            <SkeletonCard lines={4} />
+            <SkeletonCard lines={4} />
+          </div>
+        ) : sortedTasks.length === 0 ? (
+          <EmptyState
+            illustration="tasks"
+            title="Your journey starts here"
+            description="Capture what matters today — tasks turn intentions into finished work."
+            ctaLabel="+ Add your first task"
+            onCta={() => requireAuth(() => setFormOpen(true))()}
+          />
         ) : (
           <div className="space-y-8">
             {[
@@ -610,14 +623,18 @@ export function TasksPageClient() {
                           {task.status === "done" ? "✓" : ""}
                         </button>
                         <div className="min-w-0 flex-1">
-                          <p
-                            className={clsx(
-                              "font-medium text-text",
-                              task.status === "done" && "text-text-muted line-through",
-                            )}
+                          <motion.p
+                            className={clsx("font-medium text-text", task.status === "done" && "text-text-muted")}
+                            initial={false}
+                            animate={
+                              task.status === "done"
+                                ? { textDecoration: "line-through", opacity: 0.75 }
+                                : { textDecoration: "none", opacity: 1 }
+                            }
+                            transition={{ duration: 0.35, ease: "easeOut" }}
                           >
                             {task.title}
-                          </p>
+                          </motion.p>
                           <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
                             <span
                               className="rounded-full px-2 py-0.5 font-semibold"

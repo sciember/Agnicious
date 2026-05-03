@@ -2,6 +2,7 @@ import { AuthModalProvider } from "@/components/auth/auth-modal-context";
 import { AuthModal } from "@/components/auth/auth-modal";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
+import { OnboardingGate } from "@/components/layout/onboarding-gate";
 import { PageFade } from "@/components/layout/page-fade";
 import { ProfileSetupGate } from "@/components/layout/profile-setup-gate";
 import { ShellHeader } from "@/components/layout/shell-header";
@@ -12,6 +13,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <AuthModalProvider>
       <DashboardSwrProvider>
       <ProfileSetupGate>
+        <OnboardingGate>
         <div className="flex min-h-screen bg-background">
           <AppSidebar />
           <div className="relative flex min-h-screen flex-1 flex-col bg-canvas pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0">
@@ -23,6 +25,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <MobileTabBar />
           <AuthModal />
         </div>
+        </OnboardingGate>
       </ProfileSetupGate>
       </DashboardSwrProvider>
     </AuthModalProvider>

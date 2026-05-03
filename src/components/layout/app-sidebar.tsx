@@ -16,6 +16,7 @@ import {
   Settings,
   Users,
 } from "lucide-react";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import type { LucideIcon } from "lucide-react";
 import clsx from "clsx";
 import { useAuthModal } from "@/components/auth/auth-modal-context";
@@ -164,12 +165,15 @@ export function AppSidebar() {
   return (
     <aside className="hidden w-[220px] shrink-0 flex-col border-r border-border bg-surface md:flex">
       <div className="flex flex-col gap-2 border-b border-border p-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">A</div>
-          <div>
-            <p className="text-sm font-semibold leading-tight text-text">Agnicious</p>
-            <p className="text-xs text-text-muted">Build better habits</p>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">A</div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold leading-tight text-text">Agnicious</p>
+              <p className="text-xs text-text-muted">Build better habits</p>
+            </div>
           </div>
+          <ThemeToggle className="shrink-0" />
         </div>
       </div>
 

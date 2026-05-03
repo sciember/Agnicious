@@ -1,9 +1,10 @@
 "use client";
 
 import { formatDistanceToNowStrict } from "date-fns";
-import { Bell } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { EmptyState } from "@/components/ui/empty-state";
+import { SkeletonCard } from "@/components/ui/skeleton-card";
 import { UserAvatar } from "@/components/ui/user-avatar";
 
 type NotificationItem = {
@@ -24,20 +25,6 @@ function isResolved(data: string | null): boolean {
   } catch {
     return false;
   }
-}
-
-function skeletonCard() {
-  return (
-    <div className="animate-pulse rounded-xl border border-border p-4">
-      <div className="flex gap-3">
-        <div className="h-9 w-9 shrink-0 rounded-full bg-canvas" />
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="h-4 w-3/4 max-w-md rounded bg-canvas" />
-          <div className="h-3 w-24 rounded bg-canvas" />
-        </div>
-      </div>
-    </div>
-  );
 }
 
 export default function NotificationsPage() {
@@ -154,9 +141,9 @@ export default function NotificationsPage() {
           <div className="h-8 w-40 animate-pulse rounded-lg bg-canvas" />
           <div className="h-9 w-28 animate-pulse rounded-lg bg-canvas" />
         </div>
-        {skeletonCard()}
-        {skeletonCard()}
-        {skeletonCard()}
+        <SkeletonCard lines={3} />
+        <SkeletonCard lines={3} />
+        <SkeletonCard lines={3} />
       </div>
     );
   }
@@ -171,10 +158,13 @@ export default function NotificationsPage() {
       </div>
 
       {items.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border bg-white px-6 py-16 text-center">
-          <Bell className="mx-auto mb-3 h-10 w-10 text-text-muted" />
-          <p className="text-sm text-text-muted">You&apos;re all caught up! 🎉</p>
-        </div>
+        <EmptyState
+          illustration="bell"
+          title="Your journey starts here"
+          description="When friends, challenges, and milestones ping you, they&apos;ll show up here."
+          ctaLabel="Go to Social"
+          ctaHref="/social"
+        />
       ) : (
         <div className="space-y-3">
           {items.map((n) => {

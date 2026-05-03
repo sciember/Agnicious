@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { format, startOfDay, subDays } from "date-fns";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
 import clsx from "clsx";
@@ -18,9 +18,16 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { CountUp } from "@/components/ui/count-up";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthModal } from "@/components/auth/auth-modal-context";
+import { LevelUpModal } from "@/components/gamification/level-up-modal";
+import type { XpFloatItem } from "@/components/gamification/xp-float-label";
+import { XpFloatLayer } from "@/components/gamification/xp-float-label";
+import { CountUp } from "@/components/ui/count-up";
+import { EmptyState } from "@/components/ui/empty-state";
+import { MiniSparkline } from "@/components/ui/mini-sparkline";
+import { Skeleton } from "@/components/ui/skeleton";
+import { SkeletonCard } from "@/components/ui/skeleton-card";
+import { fireHabitConfetti } from "@/lib/confetti-burst";
 import { parseHabitUiMeta } from "@/lib/habit-ui-meta";
 import type { AnalyticsOverviewPayload } from "@/lib/analytics-overview";
 
@@ -89,6 +96,8 @@ function weekDots(
 export function DashboardHome() {
   const { data: session } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { requireAuth } = useAuthModal();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsOverviewPayload | null>(null);
@@ -97,6 +106,10 @@ export function DashboardHome() {
   const [habits, setHabits] = useState<HabitRow[]>([]);
   const [logs, setLogs] = useState<LogRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [xpFloats, setXpFloats] = useState<XpFloatItem[]>([]);
+  const [levelUpOpen, setLevelUpOpen] = useState(false);
+  const [levelUpLevel, setLevelUpLevel] = useState(1);
+  const prevLevelRef = useRef<number | null>(null);
 
   const todayKey = format(startOfDay(new Date()), "yyyy-MM-dd");
 
@@ -128,6 +141,22 @@ export function DashboardHome() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (searchParams.get("welcome") !== "1") return;
+    toast.success("You're all set — your journey starts now! ✨");
+    router.replace(pathname || "/", { scroll: false });
+  }, [searchParams, router, pathname]);
+
+  useEffect(() => {
+    if (!overview) return;
+    const L = overview.level;
+    if (prevLevelRef.current !== null && L > prevLevelRef.current) {
+      setLevelUpLevel(L);
+      setLevelUpOpen(true);
+    }
+    prevLevelRef.current = L;
+  }, [overview?.level]);
 
   const logsByDay = useMemo(() => {
     const m = new Map<string, Set<string>>();
@@ -183,7 +212,23 @@ export function DashboardHome() {
     return weeks.reverse();
   }, [logs]);
 
-  async function checkHabit(habitId: string) {
+  const weekSpark = useMemo(() => {
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = subDays(startOfDay(new Date()), 6 - i);
+      const key = format(d, "yyyy-MM-dd");
+      return logsByDay.get(key)?.size ?? 0;
+    });
+  }, [logsByDay]);
+
+  function pushXpFloat(clientX: number, clientY: number) {
+    const id = crypto.randomUUID();
+    setXpFloats((f) => [...f, { id, amount: 10, x: clientX, y: clientY }]);
+    window.setTimeout(() => {
+      setXpFloats((f) => f.filter((item) => item.id !== id));
+    }, 1200);
+  }
+
+  async function checkHabit(habitId: string, sourceEl: HTMLElement | null) {
     const dateIso = new Date().toISOString();
     const pendingLogId = `pending-${habitId}-${todayKey}`;
     const optimisticLog: LogRow = { id: pendingLogId, habitId, date: dateIso, status: "DONE" };
@@ -208,6 +253,11 @@ export function DashboardHome() {
       ...l.filter((x) => x.id !== pendingLogId),
       { id: data.id, habitId: data.habitId, date: data.date, status: data.status },
     ]);
+    fireHabitConfetti(sourceEl);
+    if (sourceEl) {
+      const r = sourceEl.getBoundingClientRect();
+      pushXpFloat(r.left + r.width / 2, r.top);
+    }
     toast.success("Habit logged! 🔥 Keep it up");
     void load();
   }
@@ -261,6 +311,8 @@ export function DashboardHome() {
 
   return (
     <div className="space-y-8">
+      <XpFloatLayer items={xpFloats} />
+      <LevelUpModal open={levelUpOpen} level={levelUpLevel} onClose={() => setLevelUpOpen(false)} />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-2xl font-semibold tracking-tight text-text md:text-3xl">
@@ -299,7 +351,7 @@ export function DashboardHome() {
         {loading && session?.user ? (
           <>
             {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-28" />
+              <SkeletonCard key={i} className="h-28" lines={2} />
             ))}
           </>
         ) : (
@@ -308,6 +360,8 @@ export function DashboardHome() {
               label="Habit streak"
               value={analytics?.habits.currentStreak ?? overview?.currentStreak ?? 0}
               badge={{ text: "Habits", tone: "green" }}
+              sparkline={weekSpark}
+              accent="#10b981"
             />
             <StatCard
               label="Tasks today"
@@ -316,26 +370,36 @@ export function DashboardHome() {
                 text: `${analytics?.tasks.totalToday ?? 0} total`,
                 tone: "blue",
               }}
+              sparkline={weekSpark}
+              accent="#3b82f6"
             />
             <StatCard
               label="Focus time"
               value={Math.round(focusMin)}
               badge={{ text: "min today", tone: "indigo" }}
+              sparkline={weekSpark}
+              accent="#6366f1"
             />
             <StatCard
               label="XP"
               value={overview?.xp ?? 0}
               badge={{ text: `Lvl ${overview?.level ?? 1}`, tone: "indigo" }}
+              sparkline={weekSpark}
+              accent="#a855f7"
             />
             <StatCard
               label="Completion rate"
               value={analytics?.tasks.completionRate ?? 0}
               badge={{ text: "% tasks", tone: "amber" }}
+              sparkline={weekSpark}
+              accent="#f59e0b"
             />
             <StatCard
               label="Productivity"
               value={score}
               badge={{ text: "/100", tone: "green" }}
+              sparkline={weekSpark}
+              accent="#10b981"
             />
           </>
         )}
@@ -404,7 +468,15 @@ export function DashboardHome() {
                 </li>
               ))}
               {todayTasks.length === 0 ? (
-                <p className="py-6 text-center text-sm text-text-muted">No tasks scheduled for today.</p>
+                <div className="py-4">
+                  <EmptyState
+                    illustration="tasks"
+                    title="Your journey starts here"
+                    description="Add a task for today and ship one meaningful win."
+                    ctaLabel="+ Add your first task"
+                    ctaHref="/tasks"
+                  />
+                </div>
               ) : null}
             </ul>
           </div>
@@ -430,21 +502,13 @@ export function DashboardHome() {
               <Skeleton className="h-16 w-full" />
             </div>
           ) : habits.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-14 text-center">
-              <p className="text-text-muted">No habits yet. Create one to start your streak.</p>
-              <Link
-                href="/habits"
-                className="btn-primary mt-4"
-                onClick={(e) => {
-                  if (!session?.user) {
-                    e.preventDefault();
-                    requireAuth(() => router.push("/habits"))();
-                  }
-                }}
-              >
-                Create habit
-              </Link>
-            </div>
+            <EmptyState
+              illustration="journey"
+              title="Your journey starts here"
+              description="One small habit, logged daily, becomes unstoppable momentum."
+              ctaLabel="+ Add your first habit"
+              onCta={() => requireAuth(() => router.push("/habits"))()}
+            />
           ) : (
             <ul className="space-y-3">
               {habits.map((habit) => {
@@ -486,10 +550,14 @@ export function DashboardHome() {
                     </div>
                     <motion.button
                       type="button"
-                      whileTap={{ scale: 0.92 }}
+                      whileTap={{ scale: 0.88 }}
+                      animate={done ? { scale: [1, 1.15, 1] } : { scale: 1 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 15 }}
                       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-card text-lg text-primary transition hover:bg-primary-soft disabled:opacity-40"
                       disabled={done}
-                      onClick={requireAuth(() => void checkHabit(habit.id))}
+                      onClick={(e) => {
+                        requireAuth(() => void checkHabit(habit.id, e.currentTarget))();
+                      }}
                       aria-label={done ? "Already logged" : "Log habit"}
                     >
                       ✓
@@ -564,10 +632,14 @@ function StatCard({
   label,
   value,
   badge,
+  sparkline,
+  accent,
 }: {
   label: string;
   value: number;
   badge: { text: string; tone: "green" | "amber" | "blue" | "indigo" };
+  sparkline: number[];
+  accent: string;
 }) {
   const badgeCls =
     badge.tone === "green"
@@ -580,7 +652,8 @@ function StatCard({
 
   return (
     <motion.div
-      className="app-card relative overflow-hidden"
+      className="app-card relative overflow-hidden border-l-4 pl-[calc(var(--card-padding)-4px)]"
+      style={{ borderLeftColor: accent }}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
@@ -589,9 +662,12 @@ function StatCard({
       <p className="mt-1 font-mono text-3xl font-semibold tracking-tight text-text tabular-nums">
         <CountUp value={value} />
       </p>
-      <span className={`mt-3 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${badgeCls}`}>
-        {badge.text}
-      </span>
+      <div className="mt-2 flex items-end justify-between gap-2">
+        <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${badgeCls}`}>
+          {badge.text}
+        </span>
+        <MiniSparkline values={sparkline} accent={accent} className="opacity-90" />
+      </div>
     </motion.div>
   );
 }

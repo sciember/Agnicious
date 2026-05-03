@@ -25,7 +25,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { SkeletonCard } from "@/components/ui/skeleton-card";
 import { CountUp } from "@/components/ui/count-up";
 import type { AnalyticsOverviewPayload } from "@/lib/analytics-overview";
 
@@ -277,10 +278,9 @@ export function ProductivityAnalytics() {
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {loading ? (
           <>
-            <Skeleton className="h-24" />
-            <Skeleton className="h-24" />
-            <Skeleton className="h-24" />
-            <Skeleton className="h-24" />
+            {[0, 1, 2, 3].map((i) => (
+              <SkeletonCard key={i} className="h-24" lines={2} />
+            ))}
           </>
         ) : (
           <>
@@ -291,6 +291,16 @@ export function ProductivityAnalytics() {
           </>
         )}
       </section>
+
+      {!loading && session?.user && overview && overview.habits.total === 0 ? (
+        <EmptyState
+          illustration="chart"
+          title="Your journey starts here"
+          description="Log a few habits this week — your charts and insights will light up automatically."
+          ctaLabel="+ Add your first habit"
+          ctaHref="/habits"
+        />
+      ) : null}
 
       <section>
         <h2 className="mb-3 text-lg font-semibold text-text">Habit analytics</h2>

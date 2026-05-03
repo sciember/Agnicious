@@ -4,8 +4,9 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { signOut } from "next-auth/react";
 import { AnimatePresence, motion } from "framer-motion";
 import toast from "react-hot-toast";
-import { Camera, Lock, Shield, Sparkles, Trash2 } from "lucide-react";
+import { Camera, Lock, Palette, Shield, Sparkles, Trash2 } from "lucide-react";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { publicDisplayName } from "@/lib/user-public";
 import { normalizeUsername, validateUsernameFormat } from "@/lib/username";
 
@@ -173,6 +174,20 @@ export default function SettingsPage() {
       </header>
 
       <div className="space-y-5">
+        {sectionCard(
+          <div>
+            <div className="mb-4 flex items-center gap-2">
+              <Palette className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-bold text-text">Appearance</h2>
+            </div>
+            <p className="text-sm text-text-muted">Light, dark, or system — synced with smooth transitions.</p>
+            <div className="mt-4 flex flex-wrap items-center gap-4">
+              <ThemeToggle />
+              <span className="text-sm text-text">Theme</span>
+            </div>
+          </div>,
+        )}
+
         {sectionCard(
           <div>
             <div className="mb-4 flex items-center gap-2">

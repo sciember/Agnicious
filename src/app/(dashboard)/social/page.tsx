@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import clsx from "clsx";
 import { Plus, Search, Trophy, Users } from "lucide-react";
 import { useAuthModal } from "@/components/auth/auth-modal-context";
+import { EmptyState } from "@/components/ui/empty-state";
 import { UserAvatar } from "@/components/ui/user-avatar";
 
 async function jsonFetcher<T>(url: string): Promise<T> {
@@ -359,6 +360,7 @@ export default function SocialPage() {
           </div>
           <div className="relative shrink-0">
             <input
+              id="social-friend-search"
               value={targetUsername}
               onChange={(e) => {
                 setTargetUsername(e.target.value);
@@ -413,7 +415,13 @@ export default function SocialPage() {
               ) : loading ? (
                 <p className="text-sm text-text-muted">Loading…</p>
               ) : friends !== undefined && friends.length === 0 ? (
-                <p className="text-sm text-text-muted">No friend activity yet.</p>
+                <EmptyState
+                  illustration="people"
+                  title="Your journey starts here"
+                  description="Search by @username above and send your first friend request."
+                  ctaLabel="Focus search box"
+                  onCta={() => document.getElementById("social-friend-search")?.focus()}
+                />
               ) : (
                 (friends ?? []).map((friend) => (
                   <div
@@ -453,7 +461,13 @@ export default function SocialPage() {
                 ))}
               </div>
             ) : (feed ?? []).length === 0 ? (
-              <p className="text-sm text-text-muted">No activity yet.</p>
+              <EmptyState
+                illustration="journey"
+                title="Your journey starts here"
+                description="Complete habits and tasks — your activity feed will showcase wins to friends."
+                ctaLabel="+ Add a habit"
+                ctaHref="/habits"
+              />
             ) : (
               (feed ?? []).map((item) => (
                 <div key={item.id} className="flex gap-3 rounded-xl border border-border bg-canvas p-3">
