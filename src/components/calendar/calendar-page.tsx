@@ -137,7 +137,7 @@ export function CalendarPageClient() {
           <div className="mb-4 flex items-center justify-between gap-2">
             <button
               type="button"
-              className="rounded-full border border-border-subtle bg-surface p-2 text-text-muted hover:text-text"
+              className="rounded-full border border-border bg-card p-2 text-text-muted hover:text-text"
               aria-label="Previous month"
               onClick={() => setCursor((d) => subMonths(d, 1))}
             >
@@ -146,7 +146,7 @@ export function CalendarPageClient() {
             <p className="font-mono text-lg font-semibold text-text">{format(cursor, "MMMM yyyy")}</p>
             <button
               type="button"
-              className="rounded-full border border-border-subtle bg-surface p-2 text-text-muted hover:text-text"
+              className="rounded-full border border-border bg-card p-2 text-text-muted hover:text-text"
               aria-label="Next month"
               onClick={() => setCursor((d) => addMonths(d, 1))}
             >
@@ -176,8 +176,8 @@ export function CalendarPageClient() {
                         "flex aspect-square flex-col items-start rounded-xl border p-1.5 text-left transition",
                         isSameDay(c.date, new Date())
                           ? "border-primary ring-1 ring-primary/40"
-                          : "border-border-subtle hover:border-primary/50",
-                        selected && isSameDay(c.date, selected) ? "bg-primary-soft" : "bg-surface/60",
+                          : "border-border hover:border-primary/50",
+                        selected && isSameDay(c.date, selected) ? "bg-primary-soft" : "bg-canvas",
                       )}
                     >
                       <span className="font-mono text-xs text-text">{format(c.date, "d")}</span>
@@ -228,7 +228,7 @@ export function CalendarPageClient() {
                       return (
                         <li
                           key={l.id}
-                          className="flex items-center justify-between rounded-xl border border-border-subtle bg-surface/50 px-3 py-2 text-sm"
+                          className="flex items-center justify-between rounded-xl border border-border bg-canvas px-3 py-2 text-sm"
                         >
                           <span className="flex items-center gap-2 truncate">
                             <span style={{ color: meta.accent }}>{meta.emoji}</span>

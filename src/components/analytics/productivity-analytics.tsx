@@ -30,6 +30,29 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CountUp } from "@/components/ui/count-up";
 import type { AnalyticsOverviewPayload } from "@/lib/analytics-overview";
 
+/** Recharts — light theme */
+const CHART = {
+  grid: "#E5E7EB",
+  tick: "#6B7280",
+  tooltipBg: "#FFFFFF",
+  tooltipBorder: "#E5E7EB",
+  tooltipColor: "#111827",
+  radialTrack: "#F3F4F6",
+  primary: "#6366F1",
+  green: "#10B981",
+  blue: "#3B82F6",
+  amber: "#F59E0B",
+  red: "#EF4444",
+  mutedSlice: "#9CA3AF",
+} as const;
+
+const tooltipStyle = {
+  background: CHART.tooltipBg,
+  border: `1px solid ${CHART.tooltipBorder}`,
+  borderRadius: 12,
+  color: CHART.tooltipColor,
+} as const;
+
 type RangeKey = "today" | "7d" | "30d" | "3m" | "all";
 
 const RANGE_D: Record<RangeKey, number> = {
@@ -150,8 +173,7 @@ export function ProductivityAnalytics() {
     return report.perHabitRates.map((h, i) => ({
       name: h.title.slice(0, 18),
       value: h.rate,
-      fill:
-        h.rate >= 70 ? "#3ecf8e" : h.rate >= 40 ? "#f5a623" : "#f06060",
+      fill: h.rate >= 70 ? CHART.green : h.rate >= 40 ? CHART.amber : CHART.red,
       idx: i,
     }));
   }, [report]);
@@ -171,9 +193,9 @@ export function ProductivityAnalytics() {
     const t = overview.tasks;
     const pending = Math.max(0, t.totalToday - t.completedToday);
     return [
-      { name: "Done", value: t.completedToday, color: "#6366f1" },
-      { name: "Pending", value: pending, color: "#a0a0c0" },
-      { name: "Overdue", value: t.overdue, color: "#f06060" },
+      { name: "Done", value: t.completedToday, color: CHART.primary },
+      { name: "Pending", value: pending, color: CHART.mutedSlice },
+      { name: "Overdue", value: t.overdue, color: CHART.red },
     ].filter((x) => x.value > 0);
   }, [overview]);
 
@@ -255,7 +277,7 @@ export function ProductivityAnalytics() {
               type="button"
               onClick={() => setRange(k)}
               className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-                range === k ? "bg-primary text-white" : "border border-border-subtle bg-card text-text-muted"
+                range === k ? "bg-primary text-white" : "border border-border bg-card text-text-muted"
               }`}
             >
               {k === "today" ? "Today" : k === "7d" ? "7 Days" : k === "30d" ? "30 Days" : k === "3m" ? "3 Months" : "All Time"}
@@ -296,7 +318,7 @@ export function ProductivityAnalytics() {
                       title={`${day.key}: ${day.done}`}
                       className={`h-3 w-3 rounded-sm ${
                         day.done === 0
-                          ? "bg-card border border-border-subtle"
+                          ? "border border-border bg-canvas"
                           : day.done === 1
                             ? "bg-primary/30"
                             : day.done === 2
@@ -314,17 +336,11 @@ export function ProductivityAnalytics() {
               <div className="h-60 min-h-[240px] w-full min-w-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={lineHabit}>
-                    <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fill: "#a0a0c0", fontSize: 10 }} />
-                    <YAxis tick={{ fill: "#a0a0c0", fontSize: 10 }} />
-                    <Tooltip
-                      contentStyle={{
-                        background: "#1a1a28",
-                        border: "1px solid rgba(255,255,255,0.07)",
-                        borderRadius: 12,
-                      }}
-                    />
-                    <Line type="monotone" dataKey="done" stroke="#6366f1" strokeWidth={2} dot />
+                    <CartesianGrid stroke={CHART.grid} vertical={false} />
+                    <XAxis dataKey="label" tick={{ fill: CHART.tick, fontSize: 10 }} />
+                    <YAxis tick={{ fill: CHART.tick, fontSize: 10 }} />
+                    <Tooltip contentStyle={tooltipStyle} />
+                    <Line type="monotone" dataKey="done" stroke={CHART.primary} strokeWidth={2} dot />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -343,8 +359,8 @@ export function ProductivityAnalytics() {
                       endAngle={-270}
                     >
                       <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-                      <RadialBar dataKey="value" cornerRadius={6} background={{ fill: "rgba(255,255,255,0.06)" }} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <RadialBar dataKey="value" cornerRadius={6} background={{ fill: CHART.radialTrack }} />
+                      <Legend wrapperStyle={{ fontSize: 10, color: CHART.tick }} />
                     </RadialBarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -365,16 +381,16 @@ export function ProductivityAnalytics() {
                 <AreaChart data={stackedCreatedDone}>
                   <defs>
                     <linearGradient id="ac1" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                      <stop offset="0%" stopColor={CHART.primary} stopOpacity={0.35} />
+                      <stop offset="100%" stopColor={CHART.primary} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fill: "#a0a0c0", fontSize: 10 }} />
-                  <YAxis tick={{ fill: "#a0a0c0", fontSize: 10 }} />
-                  <Tooltip contentStyle={{ background: "#1a1a28", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12 }} />
-                  <Area type="monotone" dataKey="created" stackId="1" stroke="#60a5fa" fill="url(#ac1)" />
-                  <Area type="monotone" dataKey="completed" stackId="2" stroke="#3ecf8e" fill="#3ecf8e33" />
+                  <CartesianGrid stroke={CHART.grid} vertical={false} />
+                  <XAxis dataKey="label" tick={{ fill: CHART.tick, fontSize: 10 }} />
+                  <YAxis tick={{ fill: CHART.tick, fontSize: 10 }} />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Area type="monotone" dataKey="created" stackId="1" stroke={CHART.blue} fill="url(#ac1)" />
+                  <Area type="monotone" dataKey="completed" stackId="2" stroke={CHART.green} fill={`${CHART.green}33`} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -390,11 +406,11 @@ export function ProductivityAnalytics() {
                           <Cell key={i} fill={x.color} />
                         ))}
                       </Pie>
-                      <Tooltip contentStyle={{ background: "#1a1a28", borderRadius: 12 }} />
+                      <Tooltip contentStyle={tooltipStyle} />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                    <span className="font-mono text-xl font-semibold">{overview?.tasks.completionRate ?? 0}%</span>
+                    <span className="font-mono text-xl font-semibold text-text">{overview?.tasks.completionRate ?? 0}%</span>
                   </div>
                 </>
               ) : (
@@ -406,12 +422,12 @@ export function ProductivityAnalytics() {
             <div className="h-56 min-h-[224px] w-full min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={taskBarDaily}>
-                  <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-                  <XAxis dataKey="day" tick={{ fill: "#a0a0c0", fontSize: 10 }} />
-                  <YAxis tick={{ fill: "#a0a0c0", fontSize: 10 }} />
-                  <Tooltip contentStyle={{ background: "#1a1a28", borderRadius: 12 }} />
-                  <Bar dataKey="done" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="created" fill="#60a5fa55" radius={[4, 4, 0, 0]} />
+                  <CartesianGrid stroke={CHART.grid} vertical={false} />
+                  <XAxis dataKey="day" tick={{ fill: CHART.tick, fontSize: 10 }} />
+                  <YAxis tick={{ fill: CHART.tick, fontSize: 10 }} />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Bar dataKey="done" fill={CHART.primary} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="created" fill={`${CHART.blue}55`} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -420,10 +436,10 @@ export function ProductivityAnalytics() {
             <div className="h-56 min-h-[224px] w-full min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={priorityBars} layout="vertical">
-                  <CartesianGrid stroke="rgba(255,255,255,0.06)" horizontal={false} />
-                  <XAxis type="number" tick={{ fill: "#a0a0c0", fontSize: 10 }} />
-                  <YAxis type="category" dataKey="name" tick={{ fill: "#a0a0c0", fontSize: 10 }} width={60} />
-                  <Bar dataKey="count" fill="#f5a623" radius={[0, 6, 6, 0]} />
+                  <CartesianGrid stroke={CHART.grid} horizontal={false} />
+                  <XAxis type="number" tick={{ fill: CHART.tick, fontSize: 10 }} />
+                  <YAxis type="category" dataKey="name" tick={{ fill: CHART.tick, fontSize: 10 }} width={60} />
+                  <Bar dataKey="count" fill={CHART.amber} radius={[0, 6, 6, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -457,11 +473,11 @@ export function ProductivityAnalytics() {
             <div className="h-56 min-h-[224px] w-full min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={pomodoroLine}>
-                  <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-                  <XAxis dataKey="day" tick={{ fill: "#a0a0c0", fontSize: 10 }} />
-                  <YAxis tick={{ fill: "#a0a0c0", fontSize: 10 }} />
-                  <Tooltip contentStyle={{ background: "#1a1a28", borderRadius: 12 }} />
-                  <Line type="monotone" dataKey="minutes" stroke="#3ecf8e" strokeWidth={2} dot />
+                  <CartesianGrid stroke={CHART.grid} vertical={false} />
+                  <XAxis dataKey="day" tick={{ fill: CHART.tick, fontSize: 10 }} />
+                  <YAxis tick={{ fill: CHART.tick, fontSize: 10 }} />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Line type="monotone" dataKey="minutes" stroke={CHART.green} strokeWidth={2} dot />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -470,13 +486,13 @@ export function ProductivityAnalytics() {
             <div className="h-56 min-h-[224px] w-full min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={dualLine}>
-                  <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fill: "#a0a0c0", fontSize: 9 }} />
-                  <YAxis tick={{ fill: "#a0a0c0", fontSize: 10 }} domain={[0, 100]} />
-                  <Tooltip contentStyle={{ background: "#1a1a28", borderRadius: 12 }} />
-                  <Legend />
-                  <Line type="monotone" dataKey="habitRate" name="Habit momentum" stroke="#6366f1" dot={false} />
-                  <Line type="monotone" dataKey="taskRate" name="Task momentum" stroke="#3ecf8e" dot={false} />
+                  <CartesianGrid stroke={CHART.grid} vertical={false} />
+                  <XAxis dataKey="label" tick={{ fill: CHART.tick, fontSize: 9 }} />
+                  <YAxis tick={{ fill: CHART.tick, fontSize: 10 }} domain={[0, 100]} />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Legend wrapperStyle={{ color: CHART.tick }} />
+                  <Line type="monotone" dataKey="habitRate" name="Habit momentum" stroke={CHART.primary} dot={false} />
+                  <Line type="monotone" dataKey="taskRate" name="Task momentum" stroke={CHART.green} dot={false} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>

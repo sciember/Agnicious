@@ -35,10 +35,10 @@ type TaskRow = {
 type HabitMini = { id: string; title: string; description: string | null };
 
 const PRIORITY_COLORS: Record<string, string> = {
-  low: "#60a5fa",
-  medium: "#f5a623",
-  high: "#fb923c",
-  urgent: "#f06060",
+  low: "#3B82F6",
+  medium: "#F59E0B",
+  high: "#FB923C",
+  urgent: "#EF4444",
 };
 
 function priorityLabel(p: string) {
@@ -131,6 +131,27 @@ export function TasksPageClient() {
     void loadTasks();
   }, [session?.user, loadTasks]);
 
+  const resolveProject = useCallback(
+    (projectId: string | null | undefined): TaskRow["project"] => {
+      if (!projectId) return null;
+      const p = projects.find((x) => x.id === projectId);
+      return p ? { id: p.id, name: p.name, color: p.color, icon: p.icon } : null;
+    },
+    [projects],
+  );
+
+  const mergeServerTask = useCallback(
+    (raw: unknown, fallback: TaskRow | null): TaskRow => {
+      const t = raw as TaskRow & { projectId?: string | null };
+      const pid = t.projectId ?? t.project?.id ?? fallback?.project?.id ?? null;
+      return {
+        ...t,
+        project: t.project ?? resolveProject(pid) ?? fallback?.project ?? null,
+      };
+    },
+    [resolveProject],
+  );
+
   const sortedTasks = useMemo(() => {
     const rank = (p: string) =>
       ({ urgent: 4, high: 3, medium: 2, low: 1 }[p] ?? 0);
@@ -169,19 +190,32 @@ export function TasksPageClient() {
 
   async function createProject() {
     if (!newProject.name.trim()) return;
+    const body = {
+      name: newProject.name.trim(),
+      icon: newProject.icon,
+      color: newProject.color,
+    };
+    const tempId = crypto.randomUUID();
+    const prevProjects = projects;
+    setProjects((p) => [...p, { id: tempId, ...body, taskCount: 0 }]);
+    setNewProject({ name: "", icon: "📁", color: "#6366f1" });
+    setProjectFormOpen(false);
     const res = await fetch("/api/projects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newProject),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
+      setProjects(prevProjects);
       toast.error("Could not create project");
       return;
     }
+    const server = (await res.json()) as Project;
+    setProjects((p) =>
+      p.map((x) => (x.id === tempId ? { ...server, taskCount: server.taskCount ?? 0 } : x)),
+    );
     toast.success("Project created");
-    setNewProject({ name: "", icon: "📁", color: "#6366f1" });
-    setProjectFormOpen(false);
-    await loadProjects();
+    void loadProjects();
   }
 
   async function createTask() {
@@ -196,58 +230,128 @@ export function TasksPageClient() {
         : undefined,
       estimatedMins: newTask.estimatedMins === "" ? undefined : Number(newTask.estimatedMins),
     };
-    const res = editingId
-      ? await fetch(`/api/tasks/${editingId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-      : await fetch("/api/tasks", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-    if (!res.ok) {
-      toast.error(editingId ? "Could not update task" : "Could not create task");
+    const captureProjectId = newTask.projectId || null;
+    const resetForm = () => {
+      setNewTask({
+        title: "",
+        description: "",
+        priority: "medium",
+        projectId: "",
+        dueDate: "",
+        estimatedMins: "",
+      });
+      setEditingId(null);
+      setFormOpen(false);
+    };
+
+    if (editingId) {
+      const id = editingId;
+      const formSnap = { ...newTask };
+      const prev = tasks.find((t) => t.id === id) ?? null;
+      if (!prev) return;
+      const optimistic: TaskRow = {
+        ...prev,
+        title: payload.title,
+        description: payload.description ?? null,
+        priority: payload.priority ?? prev.priority,
+        dueDate: payload.dueDate ? new Date(payload.dueDate).toISOString() : null,
+        estimatedMins: payload.estimatedMins ?? null,
+        project: resolveProject(payload.projectId ?? prev.project?.id ?? null) ?? prev.project,
+      };
+      setTasks((ts) => ts.map((t) => (t.id === id ? optimistic : t)));
+      resetForm();
+      const res = await fetch(`/api/tasks/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        if (prev) setTasks((ts) => ts.map((t) => (t.id === id ? prev : t)));
+        setEditingId(id);
+        setNewTask(formSnap);
+        setFormOpen(true);
+        toast.error("Could not update task");
+        return;
+      }
+      const raw = await res.json();
+      setTasks((ts) => ts.map((t) => (t.id === id ? mergeServerTask(raw, optimistic) : t)));
+      toast.success("Task updated");
+      void loadProjects();
       return;
     }
-    toast.success(editingId ? "Task updated" : "Task created");
-    setNewTask({
-      title: "",
-      description: "",
-      priority: "medium",
-      projectId: "",
-      dueDate: "",
-      estimatedMins: "",
+
+    const formSnap = { ...newTask };
+    const tempId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const optimisticRow: TaskRow = {
+      id: tempId,
+      title: payload.title,
+      description: payload.description ?? null,
+      priority: payload.priority ?? "medium",
+      status: "todo",
+      dueDate: payload.dueDate ? new Date(payload.dueDate).toISOString() : null,
+      estimatedMins: payload.estimatedMins ?? null,
+      completedAt: null,
+      createdAt: now,
+      project: resolveProject(captureProjectId),
+    };
+    setTasks((ts) => [optimisticRow, ...ts]);
+    resetForm();
+    const res = await fetch("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
-    setEditingId(null);
-    setFormOpen(false);
-    await loadTasks();
-    await loadProjects();
+    if (!res.ok) {
+      setTasks((ts) => ts.filter((t) => t.id !== tempId));
+      setNewTask(formSnap);
+      setFormOpen(true);
+      toast.error("Could not create task");
+      return;
+    }
+    const raw = await res.json();
+    setTasks((ts) => ts.map((t) => (t.id === tempId ? mergeServerTask(raw, optimisticRow) : t)));
+    toast.success("Task created");
+    void loadProjects();
   }
 
   async function toggleDone(task: TaskRow) {
     const next = task.status === "done" ? "todo" : "done";
+    const prev = { ...task };
+    const optimistic: TaskRow = {
+      ...task,
+      status: next,
+      completedAt: next === "done" ? new Date().toISOString() : null,
+    };
+    setTasks((ts) => ts.map((t) => (t.id === task.id ? optimistic : t)));
     const res = await fetch(`/api/tasks/${task.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: next }),
     });
     if (!res.ok) {
+      setTasks((ts) => ts.map((t) => (t.id === task.id ? prev : t)));
       toast.error("Update failed");
       return;
     }
-    await loadTasks();
-    await loadProjects();
+    const raw = await res.json();
+    setTasks((ts) => ts.map((t) => (t.id === task.id ? mergeServerTask(raw, optimistic) : t)));
+    void loadProjects();
   }
 
   async function deleteTask(id: string) {
-    const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
-    if (!res.ok) return toast.error("Delete failed");
-    toast.success("Task deleted");
+    const prevTasks = tasks;
+    const removed = tasks.find((t) => t.id === id);
+    setTasks((ts) => ts.filter((t) => t.id !== id));
     setMenuTaskId(null);
-    await loadTasks();
-    await loadProjects();
+    const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      setTasks(prevTasks);
+      toast.error("Delete failed");
+      return;
+    }
+    toast.success("Task deleted");
+    void loadProjects();
   }
 
   if (!session?.user) {
@@ -299,7 +403,7 @@ export function TasksPageClient() {
               </motion.div>
             ) : null}
           </AnimatePresence>
-          <div className="space-y-1 border-t border-border-subtle pt-3">
+          <div className="space-y-1 border-t border-border pt-3">
             <button
               type="button"
               onClick={() => {
@@ -344,7 +448,7 @@ export function TasksPageClient() {
               >
                 <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color }} />
                 <span className="flex-1 truncate">{p.icon} {p.name}</span>
-                <span className="rounded-full bg-surface px-1.5 text-[10px] text-text-muted">
+                <span className="rounded-full bg-canvas px-1.5 text-[10px] text-text-muted">
                   {p.taskCount ?? 0}
                 </span>
               </button>
@@ -359,7 +463,7 @@ export function TasksPageClient() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="rounded-full border border-border-subtle p-2"
+              className="rounded-full border border-border p-2"
               onClick={() => setDayCursor((d) => subDays(d, 1))}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -369,7 +473,7 @@ export function TasksPageClient() {
             </p>
             <button
               type="button"
-              className="rounded-full border border-border-subtle p-2"
+              className="rounded-full border border-border p-2"
               onClick={() => setDayCursor((d) => addDays(d, 1))}
             >
               <ChevronRight className="h-4 w-4" />
@@ -392,14 +496,14 @@ export function TasksPageClient() {
               onClick={() => setStatusFilter(s)}
               className={clsx(
                 "rounded-full px-3 py-1 text-xs font-semibold capitalize",
-                statusFilter === s ? "bg-primary text-white" : "bg-card text-text-muted border border-border-subtle",
+                statusFilter === s ? "bg-primary text-white" : "bg-card text-text-muted border border-border",
               )}
             >
               {s === "inprogress" ? "In Progress" : s}
             </button>
           ))}
           <select
-            className="ml-auto rounded-full border border-border-subtle bg-card px-3 py-1 text-xs text-text"
+            className="ml-auto rounded-full border border-border bg-card px-3 py-1 text-xs text-text"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
           >
@@ -434,7 +538,7 @@ export function TasksPageClient() {
                       "rounded-full px-3 py-1 text-xs font-semibold capitalize",
                       newTask.priority === p ? "ring-2 ring-white/30" : "opacity-80",
                     )}
-                    style={{ backgroundColor: PRIORITY_COLORS[p], color: "#0d0d14" }}
+                    style={{ backgroundColor: PRIORITY_COLORS[p], color: "#111827" }}
                   >
                     {p}
                   </button>
@@ -507,7 +611,7 @@ export function TasksPageClient() {
                             "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2",
                             task.status === "done"
                               ? "border-success bg-success text-background"
-                              : "border-border-subtle",
+                              : "border-border",
                           )}
                           onClick={() => void toggleDone(task)}
                           aria-label="Toggle done"
@@ -527,14 +631,14 @@ export function TasksPageClient() {
                             <span
                               className="rounded-full px-2 py-0.5 font-semibold"
                               style={{
-                                backgroundColor: `${PRIORITY_COLORS[task.priority] ?? "#a0a0c0"}33`,
-                                color: PRIORITY_COLORS[task.priority] ?? "#a0a0c0",
+                                backgroundColor: `${PRIORITY_COLORS[task.priority] ?? "#9CA3AF"}33`,
+                                color: PRIORITY_COLORS[task.priority] ?? "#9CA3AF",
                               }}
                             >
                               {priorityLabel(task.priority)}
                             </span>
                             {task.project ? (
-                              <span className="flex items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-text-muted">
+                              <span className="flex items-center gap-1 rounded-full bg-canvas px-2 py-0.5 text-text-muted">
                                 <span
                                   className="h-1.5 w-1.5 rounded-full"
                                   style={{ backgroundColor: task.project.color }}
@@ -581,7 +685,7 @@ export function TasksPageClient() {
                               <MoreHorizontal className="h-4 w-4" />
                             </button>
                             {menuTaskId === task.id ? (
-                              <div className="absolute right-0 top-full z-10 mt-1 w-36 rounded-xl border border-border-subtle bg-card py-1 shadow-xl">
+                              <div className="absolute right-0 top-full z-10 mt-1 w-36 rounded-xl border border-border bg-card py-1 shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
                                 <button
                                   type="button"
                                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
@@ -629,7 +733,7 @@ export function TasksPageClient() {
         <div className="app-card flex flex-col items-center">
           <div className="relative h-36 w-36">
             <svg viewBox="0 0 100 100" className="-rotate-90">
-              <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="10" />
+              <circle cx="50" cy="50" r="40" fill="none" stroke="#E5E7EB" strokeWidth="10" />
               <circle
                 cx="50"
                 cy="50"
@@ -650,19 +754,19 @@ export function TasksPageClient() {
             </div>
           </div>
           <div className="mt-4 grid w-full grid-cols-2 gap-2 text-center text-xs">
-            <div className="rounded-xl bg-surface p-2">
+            <div className="rounded-xl bg-canvas p-2">
               <p className="text-text-muted">Total</p>
               <p className="font-mono text-lg text-text">{stats.total}</p>
             </div>
-            <div className="rounded-xl bg-surface p-2">
+            <div className="rounded-xl bg-canvas p-2">
               <p className="text-text-muted">Done</p>
               <p className="font-mono text-lg text-success">{stats.done}</p>
             </div>
-            <div className="rounded-xl bg-surface p-2">
+            <div className="rounded-xl bg-canvas p-2">
               <p className="text-text-muted">In prog.</p>
               <p className="font-mono text-lg text-info">{stats.inprog}</p>
             </div>
-            <div className="rounded-xl bg-surface p-2">
+            <div className="rounded-xl bg-canvas p-2">
               <p className="text-text-muted">Overdue</p>
               <p className="font-mono text-lg text-danger">{stats.overdue}</p>
             </div>

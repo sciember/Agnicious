@@ -29,6 +29,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const existing = await prisma.task.findFirst({
     where: { id, userId: session.user.id },
+    select: { id: true, projectId: true },
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -36,6 +37,7 @@ export async function PATCH(request: Request, { params }: Params) {
   if (data.projectId) {
     const proj = await prisma.project.findFirst({
       where: { id: data.projectId, userId: session.user.id },
+      select: { id: true },
     });
     if (!proj) return NextResponse.json({ error: "Invalid project" }, { status: 400 });
   }
@@ -44,6 +46,8 @@ export async function PATCH(request: Request, { params }: Params) {
   if (data.status !== undefined) {
     completedAt = data.status === "done" ? new Date() : null;
   }
+
+  const nextProjectId = data.projectId !== undefined ? data.projectId : existing.projectId;
 
   const task = await prisma.task.update({
     where: { id },
@@ -62,9 +66,13 @@ export async function PATCH(request: Request, { params }: Params) {
         ? { dueDate: data.dueDate ? new Date(data.dueDate) : null }
         : {}),
     },
-    include: {
-      project: { select: { id: true, name: true, color: true, icon: true } },
-    },
+    ...(nextProjectId
+      ? {
+          include: {
+            project: { select: { id: true, name: true, color: true, icon: true } },
+          },
+        }
+      : {}),
   });
 
   return NextResponse.json(task);
@@ -77,6 +85,7 @@ export async function DELETE(_: Request, { params }: Params) {
   const { id } = await params;
   const existing = await prisma.task.findFirst({
     where: { id, userId: session.user.id },
+    select: { id: true },
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 

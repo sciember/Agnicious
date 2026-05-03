@@ -47,13 +47,13 @@ function NavLink({
       href={href}
       className={clsx(
         "relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
-        active ? "text-primary" : "text-text-muted hover:bg-card hover:text-text",
+        active ? "font-medium text-text" : "text-text-muted hover:bg-canvas hover:text-text",
       )}
     >
       {active ? (
         <motion.span
           layoutId="sidebar-active"
-          className="absolute inset-0 rounded-xl bg-primary-soft"
+          className="absolute inset-0 rounded-xl bg-canvas"
           transition={{ type: "spring", stiffness: 380, damping: 32 }}
         />
       ) : null}
@@ -89,11 +89,11 @@ export function AppSidebar() {
   }, [session?.user]);
 
   const gaugeColor =
-    score == null ? "#6366f1" : score >= 70 ? "#3ecf8e" : score >= 40 ? "#f5a623" : "#f06060";
+    score == null ? "#6366f1" : score >= 70 ? "#10b981" : score >= 40 ? "#f59e0b" : "#ef4444";
 
   return (
-    <aside className="hidden w-[220px] shrink-0 flex-col border-r border-border-subtle bg-surface md:flex">
-      <div className="flex flex-col gap-2 border-b border-border-subtle p-4">
+    <aside className="hidden w-[220px] shrink-0 flex-col border-r border-border bg-surface md:flex">
+      <div className="flex flex-col gap-2 border-b border-border p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
             A
@@ -124,15 +124,15 @@ export function AppSidebar() {
         </div>
       </nav>
 
-      <div className="mt-auto border-t border-border-subtle p-3">
+      <div className="mt-auto border-t border-border p-3">
         {session?.user ? (
-          <div className="mb-3 flex items-center gap-3 rounded-xl border border-border-subtle bg-card/50 px-3 py-2">
+          <div className="mb-3 flex items-center gap-3 rounded-xl border border-border bg-canvas px-3 py-2">
             <div className="relative h-10 w-10 shrink-0">
               <svg viewBox="0 0 36 36" className="-rotate-90">
                 <path
                   d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                   fill="none"
-                  stroke="rgba(255,255,255,0.08)"
+                  stroke="#E5E7EB"
                   strokeWidth="3"
                 />
                 <path
@@ -153,7 +153,7 @@ export function AppSidebar() {
             </div>
           </div>
         ) : null}
-        <div className="flex items-center gap-3 rounded-xl bg-card/60 px-2 py-2">
+        <div className="flex items-center gap-3 rounded-xl bg-canvas px-2 py-2">
           <div
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-semibold text-primary"
             aria-hidden

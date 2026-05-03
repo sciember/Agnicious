@@ -105,8 +105,8 @@ export default function AICoachPage() {
                 <div
                   className={
                     m.role === "user"
-                      ? "max-w-[85%] rounded-2xl rounded-br-md bg-primary px-4 py-3 text-sm text-white shadow-lg"
-                      : "max-w-[90%] rounded-2xl rounded-bl-md border border-border-subtle bg-card px-4 py-3 text-sm text-text shadow-inner [&_strong]:text-text [&_li]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5"
+                      ? "max-w-[85%] rounded-2xl rounded-br-md bg-primary px-4 py-3 text-sm text-white shadow-[0_1px_3px_rgba(0,0,0,0.12)]"
+                      : "max-w-[90%] rounded-2xl rounded-bl-md border border-border bg-canvas px-4 py-3 text-sm text-text [&_strong]:text-text [&_li]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5"
                   }
                 >
                   {m.role === "user" ? (
@@ -120,7 +120,7 @@ export default function AICoachPage() {
           </AnimatePresence>
           {loading ? (
             <div className="flex justify-start">
-              <div className="flex items-center gap-1 rounded-2xl border border-border-subtle bg-card px-4 py-3">
+              <div className="flex items-center gap-1 rounded-2xl border border-border bg-card px-4 py-3">
                 <span className="typing-dot h-2 w-2 rounded-full bg-text-muted" />
                 <span className="typing-dot h-2 w-2 rounded-full bg-text-muted" />
                 <span className="typing-dot h-2 w-2 rounded-full bg-text-muted" />
@@ -130,13 +130,13 @@ export default function AICoachPage() {
           <div ref={endRef} />
         </div>
 
-        <div className="border-t border-border-subtle bg-surface/80 px-3 py-3 backdrop-blur-md">
+        <div className="border-t border-border bg-surface px-3 py-3 backdrop-blur-md">
           <div className="mb-2 flex flex-wrap gap-2">
             {chips.map((c) => (
               <button
                 key={c.label}
                 type="button"
-                className="rounded-full border border-border-subtle bg-card px-3 py-1.5 text-xs font-medium text-text-muted transition hover:border-primary/50 hover:text-text"
+                className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-muted transition hover:border-primary/50 hover:text-text"
                 onClick={requireAuth(() => {
                   setInput(c.label);
                   void send(c.label, { detailReport: c.detail });

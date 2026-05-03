@@ -72,6 +72,7 @@ export async function POST(request: Request) {
   if (data.projectId) {
     const proj = await prisma.project.findFirst({
       where: { id: data.projectId, userId: session.user.id },
+      select: { id: true },
     });
     if (!proj) return NextResponse.json({ error: "Invalid project" }, { status: 400 });
   }
@@ -88,9 +89,13 @@ export async function POST(request: Request) {
       estimatedMins: data.estimatedMins ?? null,
       completedAt: data.status === "done" ? new Date() : null,
     },
-    include: {
-      project: { select: { id: true, name: true, color: true, icon: true } },
-    },
+    ...(data.projectId
+      ? {
+          include: {
+            project: { select: { id: true, name: true, color: true, icon: true } },
+          },
+        }
+      : {}),
   });
 
   return NextResponse.json(task, { status: 201 });

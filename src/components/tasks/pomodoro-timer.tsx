@@ -143,7 +143,7 @@ export function PomodoroTimer(props: {
   const filled = Math.min(todayCount, tomatoSlots);
 
   return (
-    <div className="rounded-2xl border border-border-subtle bg-card p-4">
+    <div className="rounded-2xl border border-border bg-card p-4">
       <p className="mb-2 text-center text-[11px] font-medium uppercase tracking-wide text-text-muted">
         Pomodoro
       </p>
@@ -163,7 +163,7 @@ export function PomodoroTimer(props: {
             onClick={() => switchMode(m)}
             className={clsx(
               "rounded-full px-2 py-1 text-[10px] font-semibold capitalize",
-              mode === m ? "bg-primary text-white" : "bg-surface text-text-muted hover:text-text",
+              mode === m ? "bg-primary text-white" : "bg-canvas text-text-muted hover:text-text",
             )}
           >
             {m === "focus" ? "Focus" : m === "short" ? "Short" : "Long"}
@@ -173,7 +173,7 @@ export function PomodoroTimer(props: {
 
       <div className="relative mx-auto h-36 w-36">
         <svg className="-rotate-90 transform" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
+          <circle cx="50" cy="50" r="45" fill="none" stroke="#E5E7EB" strokeWidth="8" />
           <motion.circle
             cx="50"
             cy="50"

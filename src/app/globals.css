@@ -1,19 +1,28 @@
 @import "tailwindcss";
 
-/* Design tokens — Agnicious (Tailwind v4 @theme) */
+/* Design tokens — Agnicious light theme (Tailwind v4 @theme) */
 @theme inline {
-  --color-background: #0d0d14;
-  --color-surface: #13131e;
-  --color-card: #1a1a28;
-  --color-border-subtle: rgba(255, 255, 255, 0.07);
+  --color-background: #f9fafb;
+  --color-canvas: #f3f4f6;
+  --color-surface: #ffffff;
+  --color-card: #ffffff;
+  --color-border: #e5e7eb;
+  --color-border-subtle: #e5e7eb;
+  --color-border-focus: #6366f1;
   --color-primary: #6366f1;
-  --color-primary-soft: rgba(99, 102, 241, 0.12);
-  --color-text: #f0f0f8;
-  --color-text-muted: #a0a0c0;
-  --color-success: #3ecf8e;
-  --color-amber: #f5a623;
-  --color-danger: #f06060;
-  --color-info: #60a5fa;
+  --color-primary-soft: #eef2ff;
+  --color-primary-hover: #4f46e5;
+  --color-text: #111827;
+  --color-text-muted: #6b7280;
+  --color-text-subtle: #9ca3af;
+  --color-success: #10b981;
+  --color-green-soft: #ecfdf5;
+  --color-amber: #f59e0b;
+  --color-amber-soft: #fffbeb;
+  --color-danger: #ef4444;
+  --color-red-soft: #fef2f2;
+  --color-info: #3b82f6;
+  --color-blue-soft: #eff6ff;
 
   --radius-card: 14px;
   --spacing-unit: 8px;
@@ -21,18 +30,39 @@
   --font-sans: var(--font-sora), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-dm-mono), ui-monospace, monospace;
 
-  --shadow-card: 0 12px 40px rgba(0, 0, 0, 0.35);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 :root {
-  --background: #0d0d14;
-  --foreground: #f0f0f8;
+  --bg: #f9fafb;
+  --bg-surface: #ffffff;
+  --bg-card: #ffffff;
+  --bg-canvas: #f3f4f6;
+  --border: #e5e7eb;
+  --border-focus: #6366f1;
+  --text: #111827;
+  --text-muted: #6b7280;
+  --text-subtle: #9ca3af;
+  --primary: #6366f1;
+  --primary-soft: #eef2ff;
+  --primary-hover: #4f46e5;
+  --green: #10b981;
+  --green-soft: #ecfdf5;
+  --amber: #f59e0b;
+  --amber-soft: #fffbeb;
+  --red: #ef4444;
+  --red-soft: #fef2f2;
+  --blue: #3b82f6;
+  --blue-soft: #eff6ff;
+
+  --background: var(--bg);
+  --foreground: var(--text);
   --card-padding: 16px;
   --card-radius: 14px;
 }
 
 html {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
@@ -49,8 +79,8 @@ body {
 
 .app-card {
   border-radius: var(--card-radius);
-  border: 1px solid var(--color-border-subtle);
-  background-color: var(--color-card);
+  border: 1px solid var(--border);
+  background-color: var(--bg-card);
   padding: var(--card-padding);
   box-shadow: var(--shadow-card);
 }
@@ -78,18 +108,18 @@ body {
 }
 
 .btn-primary {
-  @apply inline-flex items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 active:scale-[0.98];
+  @apply inline-flex items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary-hover active:scale-[0.98];
 }
 
 .btn-ghost {
-  @apply inline-flex items-center justify-center rounded-full border border-border-subtle bg-transparent px-4 py-2 text-sm font-medium text-text transition hover:bg-primary-soft hover:text-primary;
+  @apply inline-flex items-center justify-center rounded-full border border-border bg-transparent px-4 py-2 text-sm font-medium text-text transition hover:bg-primary-soft hover:text-primary;
 }
 
 .input-field {
-  @apply w-full rounded-xl border border-border-subtle bg-surface px-3 py-2.5 text-sm text-text placeholder:text-text-muted outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/20;
+  @apply w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-text placeholder:text-text-muted outline-none transition focus:border-border-focus focus:ring-2 focus:ring-primary/20;
 }
 
-/* react-hot-toast dark theme */
+/* Toasts */
 [data-sonner-toaster],
 div[role="status"] {
   font-family: var(--font-sans) !important;

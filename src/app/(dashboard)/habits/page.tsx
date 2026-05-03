@@ -30,7 +30,7 @@ type Habit = {
 type LogRow = { habitId: string; date: string; status: string };
 
 const EMOJIS = ["🔥", "💧", "📚", "🏃", "🧘", "💤", "🍎", "✨"];
-const ACCENTS = ["#6366f1", "#3ecf8e", "#60a5fa", "#f5a623", "#f06060", "#a78bfa", "#ec4899", "#14b8a6"];
+const ACCENTS = ["#6366f1", "#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#a78bfa", "#ec4899", "#14b8a6"];
 
 const defaultForm = {
   title: "",
@@ -48,7 +48,6 @@ export default function HabitsPage() {
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState(defaultForm);
-  const [submitting, setSubmitting] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState({ title: "", lifeArea: "HEALTH" as Habit["lifeArea"] });
@@ -106,53 +105,98 @@ export default function HabitsPage() {
     return Math.round((hit / 7) * 100);
   }
 
+  function habitFromApi(raw: unknown): Habit {
+    const h = raw as Record<string, unknown>;
+    return {
+      id: h.id as string,
+      title: h.title as string,
+      description: (h.description as string | null) ?? null,
+      type: h.type as Habit["type"],
+      repeatPattern: String(h.repeatPattern),
+      lifeArea: h.lifeArea as Habit["lifeArea"],
+    };
+  }
+
   async function createHabit() {
     if (!form.title.trim()) {
       toast.error("Name is required.");
       return;
     }
-    setSubmitting(true);
     const description = serializeHabitUiMeta({ emoji: form.emoji, accent: form.accent });
+    const habitType = (form.frequency === "daily" ? "DAILY" : "WEEKLY") as Habit["type"];
     const body = {
       title: form.title.trim(),
       description,
-      type: form.frequency === "daily" ? "DAILY" : "WEEKLY",
+      type: habitType,
       repeatPattern: "EVERYDAY",
       customWeekdays: [] as number[],
       lifeArea: form.lifeArea,
     };
+    const formSnap = { ...form };
+    const tempId = crypto.randomUUID();
+    const optimistic: Habit = {
+      id: tempId,
+      title: body.title,
+      description: description ?? null,
+      type: habitType,
+      repeatPattern: "EVERYDAY",
+      lifeArea: body.lifeArea,
+    };
+    const prevHabits = habits;
+    setHabits((h) => [optimistic, ...h]);
+    setForm(defaultForm);
+    setFormOpen(false);
     const res = await fetch("/api/habits", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    setSubmitting(false);
     if (!res.ok) {
+      setHabits(prevHabits);
+      setForm(formSnap);
+      setFormOpen(true);
       toast.error("Could not create habit.");
       return;
     }
+    const server = await res.json();
+    setHabits((h) => h.map((x) => (x.id === tempId ? habitFromApi(server) : x)));
     toast.success("Habit created successfully");
-    setForm(defaultForm);
-    setFormOpen(false);
-    await load();
+    void load();
   }
 
   async function logDone(habitId: string) {
+    const dateIso = new Date().toISOString();
+    const optimisticLog: LogRow = { habitId, date: dateIso, status: "DONE" };
+    const prevLogs = logs;
+    setLogs((l) => [...l, optimisticLog]);
     const res = await fetch("/api/logs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         habitId,
         status: "DONE",
-        date: new Date().toISOString(),
+        date: dateIso,
       }),
     });
     if (!res.ok) {
+      setLogs(prevLogs);
       toast.error("Could not log habit.");
       return;
     }
+    const data = (await res.json()) as { habitId: string; date: string; status: string };
+    setLogs((l) => [
+      ...l.filter(
+        (x) =>
+          !(
+            x.habitId === habitId &&
+            x.status === "DONE" &&
+            format(new Date(x.date), "yyyy-MM-dd") === todayKey
+          ),
+      ),
+      { habitId: data.habitId, date: data.date, status: data.status },
+    ]);
     toast.success("Habit logged! 🔥 Keep it up");
-    await load();
+    void load();
   }
 
   async function applyFreeze(habitId: string) {
@@ -171,17 +215,33 @@ export default function HabitsPage() {
   }
 
   async function deleteHabit(id: string) {
+    const prevHabits = habits;
+    const prevLogs = logs;
+    setHabits((h) => h.filter((x) => x.id !== id));
+    setLogs((l) => l.filter((x) => x.habitId !== id));
+    setMenuOpenId(null);
     const res = await fetch(`/api/habits/${id}`, { method: "DELETE" });
     if (!res.ok) {
+      setHabits(prevHabits);
+      setLogs(prevLogs);
       toast.error("Could not delete.");
       return;
     }
     toast.success("Habit archived.");
-    setMenuOpenId(null);
-    await load();
+    void load();
   }
 
   async function saveEdit(id: string, description: string | null) {
+    const prev = habits.find((h) => h.id === id);
+    if (!prev) return;
+    const next: Habit = {
+      ...prev,
+      title: editDraft.title.trim(),
+      lifeArea: editDraft.lifeArea,
+      description,
+    };
+    setHabits((hs) => hs.map((h) => (h.id === id ? next : h)));
+    setEditId(null);
     const res = await fetch(`/api/habits/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -192,12 +252,16 @@ export default function HabitsPage() {
       }),
     });
     if (!res.ok) {
+      setHabits((hs) => hs.map((h) => (h.id === id ? prev : h)));
+      setEditId(id);
+      setEditDraft({ title: prev.title, lifeArea: prev.lifeArea });
       toast.error("Could not save.");
       return;
     }
+    const server = await res.json();
+    setHabits((hs) => hs.map((h) => (h.id === id ? habitFromApi(server) : h)));
     toast.success("Habit updated.");
-    setEditId(null);
-    await load();
+    void load();
   }
 
   const openNewForm = requireAuth(() => setFormOpen(true));
@@ -261,7 +325,7 @@ export default function HabitsPage() {
               </div>
               <div>
                 <span className="text-xs font-medium text-text-muted">Frequency</span>
-                <div className="mt-2 flex rounded-xl border border-border-subtle bg-surface p-1">
+                <div className="mt-2 flex rounded-xl border border-border bg-canvas p-1">
                   {(
                     [
                       ["daily", "Daily"],
@@ -294,7 +358,7 @@ export default function HabitsPage() {
                         "flex h-10 w-10 items-center justify-center rounded-xl border text-lg transition",
                         form.emoji === e
                           ? "border-primary bg-primary-soft"
-                          : "border-border-subtle bg-card hover:border-primary/40",
+                          : "border-border bg-card hover:border-primary/40",
                       )}
                     >
                       {e}
@@ -312,7 +376,7 @@ export default function HabitsPage() {
                       aria-label={`Color ${c}`}
                       className={clsx(
                         "h-8 w-8 rounded-full border-2 transition",
-                        form.accent === c ? "border-white ring-2 ring-primary ring-offset-2 ring-offset-surface" : "border-transparent",
+                        form.accent === c ? "border-border ring-2 ring-primary ring-offset-2 ring-offset-card" : "border-transparent",
                       )}
                       style={{ backgroundColor: c }}
                       onClick={() => setForm((s) => ({ ...s, accent: c }))}
@@ -321,15 +385,10 @@ export default function HabitsPage() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 pt-2">
-                <button
-                  type="button"
-                  className="btn-primary"
-                  disabled={submitting}
-                  onClick={requireAuth(() => void createHabit())}
-                >
-                  {submitting ? "Saving…" : "Save"}
+                <button type="button" className="btn-primary" onClick={requireAuth(() => void createHabit())}>
+                  Save
                 </button>
-                <button type="button" className="btn-ghost" onClick={() => setFormOpen(false)} disabled={submitting}>
+                <button type="button" className="btn-ghost" onClick={() => setFormOpen(false)}>
                   Cancel
                 </button>
               </div>
@@ -452,14 +511,14 @@ export default function HabitsPage() {
                                 key={d.key}
                                 className={clsx(
                                   "h-2.5 w-2.5 rounded-full border",
-                                  d.done ? "border-success/30 bg-success" : "border-border-subtle bg-card",
+                                  d.done ? "border-success/30 bg-success" : "border-border bg-card",
                                   d.isToday && !d.done ? "ring-2 ring-primary ring-offset-2 ring-offset-card" : "",
                                 )}
                               />
                             ))}
                           </div>
                         </div>
-                        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface">
+                        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-canvas">
                           <motion.div
                             className="h-full rounded-full"
                             style={{ backgroundColor: meta.accent }}
@@ -475,7 +534,7 @@ export default function HabitsPage() {
                       <motion.button
                         type="button"
                         whileTap={{ scale: 0.9 }}
-                        className="flex h-11 w-11 items-center justify-center rounded-full border border-border-subtle bg-surface text-lg text-primary hover:bg-primary-soft disabled:opacity-40"
+                        className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-canvas text-lg text-primary hover:bg-primary-soft disabled:opacity-40"
                         disabled={doneToday}
                         onClick={requireAuth(() => void logDone(habit.id))}
                         aria-label="Log done"
@@ -485,17 +544,17 @@ export default function HabitsPage() {
                       <div className="relative">
                         <button
                           type="button"
-                          className="flex h-11 w-11 items-center justify-center rounded-full border border-border-subtle bg-card text-text-muted hover:text-text"
+                          className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card text-text-muted hover:text-text"
                           aria-label="Menu"
                           onClick={() => setMenuOpenId(menuOpen ? null : habit.id)}
                         >
                           <MoreHorizontal className="h-5 w-5" />
                         </button>
                         {menuOpen ? (
-                          <div className="absolute right-0 top-full z-20 mt-2 w-48 rounded-xl border border-border-subtle bg-card py-1 shadow-xl">
+                          <div className="absolute right-0 top-full z-20 mt-2 w-48 rounded-xl border border-border bg-card py-1 shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
                             <button
                               type="button"
-                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text hover:bg-surface"
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text hover:bg-canvas"
                               onClick={() => {
                                 setEditDraft({ title: habit.title, lifeArea: habit.lifeArea });
                                 setEditId(habit.id);
@@ -506,21 +565,21 @@ export default function HabitsPage() {
                             </button>
                             <button
                               type="button"
-                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text hover:bg-surface"
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text hover:bg-canvas"
                               onClick={() => void deleteHabit(habit.id)}
                             >
                               <Trash2 className="h-4 w-4" /> Delete
                             </button>
                             <Link
                               href="/analytics"
-                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text hover:bg-surface"
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text hover:bg-canvas"
                               onClick={() => setMenuOpenId(null)}
                             >
                               <BarChart3 className="h-4 w-4" /> Stats
                             </Link>
                             <button
                               type="button"
-                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text hover:bg-surface"
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text hover:bg-canvas"
                               onClick={() => {
                                 setMenuOpenId(null);
                                 void applyFreeze(habit.id);

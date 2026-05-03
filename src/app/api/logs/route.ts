@@ -60,16 +60,26 @@ export async function POST(request: Request) {
   const date = new Date(parsed.data.date);
   const previousStreak = await prisma.streak.findFirst({
     where: { habitId: parsed.data.habitId, userId: session.user.id },
+    select: { currentCount: true, longestCount: true },
   });
 
   const existing = await prisma.habitLog.findUnique({
     where: { habitId_date: { habitId: parsed.data.habitId, date } },
+    select: { id: true },
   });
+
+  const logSelect = {
+    id: true,
+    habitId: true,
+    date: true,
+    status: true,
+  } as const;
 
   const log = existing
     ? await prisma.habitLog.update({
         where: { id: existing.id },
         data: { status: parsed.data.status as HabitStatus, note: parsed.data.note, completedAt: new Date() },
+        select: logSelect,
       })
     : await prisma.habitLog.create({
         data: {
@@ -80,6 +90,7 @@ export async function POST(request: Request) {
           note: parsed.data.note,
           completedAt: new Date(),
         },
+        select: logSelect,
       });
 
   const doneCount = await prisma.habitLog.count({
@@ -152,7 +163,10 @@ export async function POST(request: Request) {
   // Update active challenges.
   const activeChallenges = await prisma.userChallenge.findMany({
     where: { userId: session.user.id, completedAt: null },
-    include: { challenge: true },
+    select: {
+      id: true,
+      challenge: { select: { durationDays: true } },
+    },
   });
   for (const challenge of activeChallenges) {
     const progress = await prisma.habitLog.count({

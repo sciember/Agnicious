@@ -181,7 +181,7 @@ export default function SocialPage() {
           <button type="button" className="btn-primary w-full sm:w-auto" onClick={sendRequest} disabled={busy}>
             {busy ? "Sending…" : "Send Request"}
           </button>
-          <div className="space-y-2 border-t border-border-subtle pt-4">
+          <div className="space-y-2 border-t border-border pt-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Requests</p>
             {friends.length === 0 ? (
               <p className="text-sm text-text-muted">No friend activity yet.</p>
@@ -189,7 +189,7 @@ export default function SocialPage() {
               friends.map((friend) => (
                 <div
                   key={friend.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border-subtle bg-surface/50 px-3 py-2 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-canvas px-3 py-2 text-sm"
                 >
                   <span className="text-text">
                     {friend.requester.name ?? friend.requester.email} ↔ {friend.addressee.name ?? friend.addressee.email}
@@ -222,7 +222,7 @@ export default function SocialPage() {
               <p className="text-sm text-text-muted">No activity yet.</p>
             ) : (
               feedItems.map((item) => (
-                <div key={item.id} className="flex gap-3 rounded-xl border border-border-subtle bg-surface/40 p-3">
+                <div key={item.id} className="flex gap-3 rounded-xl border border-border bg-canvas p-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-semibold text-primary">
                     {item.bubble}
                   </div>
@@ -256,7 +256,7 @@ export default function SocialPage() {
                       {challenge.durationDays} days · stay consistent with daily completions
                     </p>
                   </div>
-                  <span className="rounded-full bg-surface px-2 py-1 text-[11px] text-text-muted">Community</span>
+                  <span className="rounded-full bg-canvas px-2 py-1 text-[11px] text-text-muted">Community</span>
                 </div>
                 <div>
                   <div className="mb-1 flex justify-between text-xs text-text-muted">
@@ -265,7 +265,7 @@ export default function SocialPage() {
                       {challenge.progress}/{challenge.durationDays}
                     </span>
                   </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-surface">
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-canvas">
                     <motion.div
                       className="h-full rounded-full bg-primary"
                       initial={{ width: 0 }}
@@ -298,13 +298,13 @@ export default function SocialPage() {
       </section>
 
       <section className="app-card overflow-hidden p-0">
-        <div className="border-b border-border-subtle px-4 py-3">
+        <div className="border-b border-border px-4 py-3">
           <h2 className="text-lg font-semibold text-text">Leaderboard</h2>
           <p className="text-xs text-text-muted">Ranked by XP</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[520px] border-collapse text-left text-sm">
-            <thead className="bg-surface/80 text-xs uppercase tracking-wide text-text-muted">
+            <thead className="bg-canvas text-xs uppercase tracking-wide text-text-muted">
               <tr>
                 <th className="px-4 py-3 font-semibold">Rank</th>
                 <th className="px-4 py-3 font-semibold">Player</th>
@@ -320,7 +320,7 @@ export default function SocialPage() {
                 return (
                   <tr
                     key={row.id}
-                    className={clsx("border-t border-border-subtle", isYou ? "bg-primary-soft/60" : "bg-transparent")}
+                    className={clsx("border-t border-border", isYou ? "bg-primary-soft/60" : "bg-transparent")}
                   >
                     <td className="px-4 py-3 font-mono text-text">
                       <span className="mr-2">{medal}</span>

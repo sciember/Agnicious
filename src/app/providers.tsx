@@ -16,15 +16,15 @@ export function Providers({ children }: Props) {
         position="top-center"
         toastOptions={{
           duration: 3200,
-          className: "!bg-card !text-text !border !border-border-subtle !rounded-xl !shadow-lg",
+          className: "!bg-card !text-text !border !border-border !rounded-xl !shadow-[0_1px_3px_rgba(0,0,0,0.08)]",
         }}
       />
       <SonnerToaster
         position="top-center"
-        theme="dark"
+        theme="light"
         richColors
         toastOptions={{
-          className: "bg-card text-text border border-border-subtle",
+          className: "bg-card text-text border border-border",
         }}
       />
     </SessionProvider>

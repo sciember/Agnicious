@@ -26,7 +26,7 @@ export function AuthModal() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="auth-modal-title"
-            className="relative z-10 w-full max-w-md rounded-[var(--card-radius)] border border-border-subtle bg-card p-6 shadow-2xl"
+            className="relative z-10 w-full max-w-md rounded-[var(--card-radius)] border border-border bg-card p-6 shadow-[0_4px_24px_rgba(0,0,0,0.08)]"
             initial={{ opacity: 0, y: 12, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.98 }}

@@ -11,6 +11,7 @@ import clsx from "clsx";
 import {
   Bar,
   BarChart,
+  CartesianGrid,
   Cell,
   ResponsiveContainer,
   Tooltip,
@@ -183,26 +184,47 @@ export function DashboardHome() {
   }, [logs]);
 
   async function checkHabit(habitId: string) {
+    const dateIso = new Date().toISOString();
+    const pendingLogId = `pending-${habitId}-${todayKey}`;
+    const optimisticLog: LogRow = { id: pendingLogId, habitId, date: dateIso, status: "DONE" };
+    const prevLogs = logs;
+    setLogs((l) => [...l, optimisticLog]);
     const res = await fetch("/api/logs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         habitId,
         status: "DONE",
-        date: new Date().toISOString(),
+        date: dateIso,
       }),
     });
     if (!res.ok) {
+      setLogs(prevLogs);
       toast.error("Could not log habit.");
       return;
     }
+    const data = (await res.json()) as { id: string; habitId: string; date: string; status: LogRow["status"] };
+    setLogs((l) => [
+      ...l.filter((x) => x.id !== pendingLogId),
+      { id: data.id, habitId: data.habitId, date: data.date, status: data.status },
+    ]);
     toast.success("Habit logged! 🔥 Keep it up");
-    await load();
+    void load();
   }
 
   async function quickAddTask() {
     const title = quickTask.trim();
     if (!title) return;
+    const tempId = crypto.randomUUID();
+    const optimistic = {
+      id: tempId,
+      title,
+      priority: "medium",
+      status: "todo",
+    };
+    const prevToday = todayTasks;
+    setTodayTasks((t) => [optimistic, ...t].slice(0, 8));
+    setQuickTask("");
     const res = await fetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -213,12 +235,22 @@ export function DashboardHome() {
       }),
     });
     if (!res.ok) {
+      setTodayTasks(prevToday);
+      setQuickTask(title);
       toast.error("Could not add task");
       return;
     }
+    const server = (await res.json()) as {
+      id: string;
+      title: string;
+      priority: string;
+      status: string;
+    };
+    setTodayTasks((t) =>
+      t.map((x) => (x.id === tempId ? { id: server.id, title: server.title, priority: server.priority, status: server.status } : x)).slice(0, 8),
+    );
     toast.success("Task added");
-    setQuickTask("");
-    await load();
+    void load();
   }
 
   const firstName = session?.user?.name?.split(" ")[0] ?? session?.user?.name;
@@ -307,7 +339,7 @@ export function DashboardHome() {
             <p className="text-xs font-medium uppercase text-text-muted">Productivity score</p>
             <div className="relative mt-4 h-40 w-40">
               <svg viewBox="0 0 100 100" className="-rotate-90">
-                <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="10" />
+                <circle cx="50" cy="50" r="42" fill="none" stroke="#E5E7EB" strokeWidth="10" />
                 <circle
                   cx="50"
                   cy="50"
@@ -355,7 +387,7 @@ export function DashboardHome() {
               {todayTasks.slice(0, 5).map((t) => (
                 <li
                   key={t.id}
-                  className="flex items-center justify-between rounded-xl border border-border-subtle bg-surface/40 px-3 py-2 text-sm"
+                  className="flex items-center justify-between rounded-xl border border-border bg-canvas px-3 py-2 text-sm"
                 >
                   <span className="truncate text-text">{t.title}</span>
                   <span className="shrink-0 rounded-full bg-primary-soft px-2 py-0.5 text-[10px] font-semibold capitalize text-primary">
@@ -409,7 +441,7 @@ export function DashboardHome() {
                 return (
                   <li
                     key={habit.id}
-                    className="flex flex-wrap items-center gap-3 rounded-xl border border-border-subtle bg-surface/40 px-3 py-3 sm:flex-nowrap"
+                    className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-canvas px-3 py-3 sm:flex-nowrap"
                   >
                     <div
                       className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg"
@@ -431,7 +463,7 @@ export function DashboardHome() {
                           title={d.key}
                           className={[
                             "h-2.5 w-2.5 rounded-full border",
-                            d.done ? "border-success/40 bg-success" : "border-border-subtle bg-card",
+                            d.done ? "border-success/40 bg-success" : "border-border bg-card",
                             d.isToday && !d.done ? "ring-2 ring-primary ring-offset-2 ring-offset-surface" : "",
                             d.isToday && d.done ? "ring-2 ring-success/50 ring-offset-2 ring-offset-surface" : "",
                           ].join(" ")}
@@ -441,7 +473,7 @@ export function DashboardHome() {
                     <motion.button
                       type="button"
                       whileTap={{ scale: 0.92 }}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-card text-lg text-primary transition hover:bg-primary-soft disabled:opacity-40"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-card text-lg text-primary transition hover:bg-primary-soft disabled:opacity-40"
                       disabled={done}
                       onClick={requireAuth(() => void checkHabit(habit.id))}
                       aria-label={done ? "Already logged" : "Log habit"}
@@ -465,7 +497,7 @@ export function DashboardHome() {
                   d.count === 0 ? 0 : d.count === 1 ? 1 : d.count === 2 ? 2 : 3;
                 const bg =
                   intensity === 0
-                    ? "bg-card"
+                    ? "border border-border bg-canvas"
                     : intensity === 1
                       ? "bg-primary/25"
                       : intensity === 2
@@ -488,14 +520,15 @@ export function DashboardHome() {
             <div className="mt-3 h-44 w-full min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={weeklyBars}>
-                  <XAxis dataKey="label" tick={{ fill: "#a0a0c0", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <CartesianGrid stroke="#E5E7EB" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fill: "#6B7280", fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis hide />
                   <Tooltip
                     contentStyle={{
-                      background: "#1a1a28",
-                      border: "1px solid rgba(255,255,255,0.07)",
+                      background: "#FFFFFF",
+                      border: "1px solid #E5E7EB",
                       borderRadius: 12,
-                      color: "#f0f0f8",
+                      color: "#111827",
                     }}
                   />
                   <Bar dataKey="total" radius={[6, 6, 0, 0]} animationDuration={600}>

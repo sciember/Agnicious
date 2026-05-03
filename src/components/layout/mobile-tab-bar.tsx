@@ -19,7 +19,7 @@ export function MobileTabBar() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 flex border-t border-border-subtle bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+      className="fixed bottom-0 left-0 right-0 z-40 flex border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
       aria-label="Primary"
     >
       {tabs.map((tab) => {
