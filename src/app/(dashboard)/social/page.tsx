@@ -45,6 +45,13 @@ type Leader = {
   streakCount: number;
 };
 
+type InviteSearchUser = {
+  id: string;
+  username: string | null;
+  displayName: string;
+  photoUrl: string | null;
+};
+
 export default function SocialPage() {
   const { data: session, status } = useSession();
   const { requireAuth } = useAuthModal();
@@ -62,10 +69,14 @@ export default function SocialPage() {
   const [createTitle, setCreateTitle] = useState("");
   const [createDesc, setCreateDesc] = useState("");
   const [createDays, setCreateDays] = useState(7);
-  const [friendSearch, setFriendSearch] = useState("");
+  const [createSearch, setCreateSearch] = useState("");
+  const [createResults, setCreateResults] = useState<InviteSearchUser[]>([]);
+  const [createLoading, setCreateLoading] = useState(false);
   const [createInviteIds, setCreateInviteIds] = useState<string[]>([]);
   const [inviteModalIds, setInviteModalIds] = useState<string[]>([]);
   const [inviteSearch, setInviteSearch] = useState("");
+  const [inviteResults, setInviteResults] = useState<InviteSearchUser[]>([]);
+  const [inviteLoading, setInviteLoading] = useState(false);
 
   const loadAuthData = useCallback(async () => {
     const uid = session?.user?.id;
@@ -108,12 +119,6 @@ export default function SocialPage() {
       .filter((f) => f.status === "ACCEPTED")
       .map((f) => (f.requesterId === currentUserId ? f.addressee : f.requester));
   }, [friends, currentUserId]);
-
-  const filteredFriendsForInvite = useMemo(() => {
-    const q = friendSearch.trim().toLowerCase();
-    if (!q) return acceptedFriends;
-    return acceptedFriends.filter((u) => (u.username ? `@${u.username}` : u.displayName).toLowerCase().includes(q));
-  }, [acceptedFriends, friendSearch]);
 
   useEffect(() => {
     const raw = targetUsername.trim();
@@ -201,7 +206,8 @@ export default function SocialPage() {
     setCreateDesc("");
     setCreateDays(7);
     setCreateInviteIds([]);
-    setFriendSearch("");
+    setCreateSearch("");
+    setCreateResults([]);
     await loadAuthData();
     setBusy(false);
     toast.success("Challenge created.");
@@ -261,10 +267,72 @@ export default function SocialPage() {
   }
 
   const inviteCandidates = useMemo(() => {
-    const q = inviteSearch.trim().toLowerCase();
-    if (!q) return acceptedFriends;
-    return acceptedFriends.filter((u) => (u.username ? `@${u.username}` : u.displayName).toLowerCase().includes(q));
-  }, [acceptedFriends, inviteSearch]);
+    const map = new Map<string, InviteSearchUser>();
+    for (const u of acceptedFriends) {
+      map.set(u.id, u);
+    }
+    for (const u of inviteResults) {
+      map.set(u.id, u);
+    }
+    return Array.from(map.values());
+  }, [acceptedFriends, inviteResults]);
+
+  const createCandidates = useMemo(() => {
+    const map = new Map<string, InviteSearchUser>();
+    for (const u of acceptedFriends) {
+      map.set(u.id, u);
+    }
+    for (const u of createResults) {
+      map.set(u.id, u);
+    }
+    return Array.from(map.values());
+  }, [acceptedFriends, createResults]);
+
+  const selectedInviteUsers = useMemo(
+    () => inviteCandidates.filter((u) => inviteModalIds.includes(u.id)),
+    [inviteCandidates, inviteModalIds],
+  );
+
+  const selectedCreateUsers = useMemo(
+    () => createCandidates.filter((u) => createInviteIds.includes(u.id)),
+    [createCandidates, createInviteIds],
+  );
+
+  useEffect(() => {
+    if (!createOpen) return;
+    let cancelled = false;
+    setCreateLoading(true);
+    const id = setTimeout(async () => {
+      const r = await fetch(`/api/social/users/search?q=${encodeURIComponent(createSearch.trim())}`);
+      const d = (await r.json().catch(() => [])) as InviteSearchUser[];
+      if (!cancelled) {
+        setCreateResults(Array.isArray(d) ? d : []);
+        setCreateLoading(false);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+    };
+  }, [createSearch, createOpen]);
+
+  useEffect(() => {
+    if (!inviteOpen) return;
+    let cancelled = false;
+    setInviteLoading(true);
+    const id = setTimeout(async () => {
+      const r = await fetch(`/api/social/users/search?q=${encodeURIComponent(inviteSearch.trim())}`);
+      const d = (await r.json().catch(() => [])) as InviteSearchUser[];
+      if (!cancelled) {
+        setInviteResults(Array.isArray(d) ? d : []);
+        setInviteLoading(false);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+    };
+  }, [inviteSearch, inviteOpen]);
 
   function toggleCreateInvite(id: string) {
     setCreateInviteIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -363,7 +431,8 @@ export default function SocialPage() {
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 sm:w-auto"
             onClick={requireAuth(() => {
               setCreateInviteIds([]);
-              setFriendSearch("");
+              setCreateSearch("");
+              setCreateResults([]);
               setCreateOpen(true);
             })}
           >
@@ -521,25 +590,56 @@ export default function SocialPage() {
                   <input type="number" min={1} max={365} className="input-field mt-1" value={createDays} onChange={(e) => setCreateDays(Number(e.target.value) || 1)} />
                 </label>
                 <div>
-                  <p className="text-sm font-medium text-text">Invite friends by @username</p>
-                  <div className="relative mt-1">
+                  <p className="text-sm font-medium text-text">Invite friends</p>
+                  {selectedCreateUsers.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {selectedCreateUsers.map((u) => (
+                        <span key={u.id} className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700">
+                          {u.username ? `@${u.username}` : u.displayName}
+                          <button
+                            type="button"
+                            className="ml-1 rounded-full px-1 text-indigo-700 hover:bg-indigo-100"
+                            onClick={() => toggleCreateInvite(u.id)}
+                            aria-label={`Remove ${u.username ?? u.displayName}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="relative mt-2">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
-                    <input className="input-field pl-9" placeholder="@username" value={friendSearch} onChange={(e) => setFriendSearch(e.target.value)} />
+                    <input
+                      className="input-field pl-9"
+                      placeholder="Search @username or name"
+                      value={createSearch}
+                      onChange={(e) => setCreateSearch(e.target.value)}
+                    />
                   </div>
                   <ul className="mt-2 max-h-36 space-y-1 overflow-y-auto rounded-lg border border-border bg-canvas p-2">
-                    {filteredFriendsForInvite.length === 0 ? (
-                      <li className="text-xs text-text-muted">No matches</li>
-                    ) : (
-                      filteredFriendsForInvite.map((u) => (
-                        <li key={u.id}>
-                          <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-card">
-                            <input type="checkbox" checked={createInviteIds.includes(u.id)} onChange={() => toggleCreateInvite(u.id)} />
-                            <UserAvatar photoUrl={u.photoUrl} displayName={u.displayName} seed={u.id} size={24} />
-                            {u.username ? `@${u.username}` : u.displayName}
-                          </label>
-                        </li>
-                      ))
-                    )}
+                    {createLoading ? <li className="px-2 py-2 text-xs text-text-muted">Searching...</li> : null}
+                    {!createLoading && createResults.length === 0 ? <li className="px-2 py-2 text-xs text-text-muted">No users found</li> : null}
+                    {!createLoading
+                      ? createResults.map((u) => (
+                          <li key={u.id}>
+                            <button
+                              type="button"
+                              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-card"
+                              onClick={() => toggleCreateInvite(u.id)}
+                            >
+                              <UserAvatar photoUrl={u.photoUrl} displayName={u.displayName} seed={u.id} size={28} />
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-text">{u.displayName}</p>
+                                <p className="truncate text-xs text-text-muted">{u.username ? `@${u.username}` : "No username"}</p>
+                              </div>
+                              {createInviteIds.includes(u.id) ? (
+                                <span className="ml-auto rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">Selected</span>
+                              ) : null}
+                            </button>
+                          </li>
+                        ))
+                      : null}
                   </ul>
                 </div>
               </div>
@@ -567,20 +667,55 @@ export default function SocialPage() {
               exit={{ y: 12, opacity: 0 }}
             >
               <h3 className="text-lg font-semibold text-text">Invite friends</h3>
+              {selectedInviteUsers.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {selectedInviteUsers.map((u) => (
+                    <span key={u.id} className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700">
+                      {u.username ? `@${u.username}` : u.displayName}
+                      <button
+                        type="button"
+                        className="ml-1 rounded-full px-1 text-indigo-700 hover:bg-indigo-100"
+                        onClick={() => toggleModalInvite(u.id)}
+                        aria-label={`Remove ${u.username ?? u.displayName}`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               <div className="relative mt-3">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
-                <input className="input-field pl-9" placeholder="@username" value={inviteSearch} onChange={(e) => setInviteSearch(e.target.value)} />
+                <input
+                  className="input-field pl-9"
+                  placeholder="Search @username or name"
+                  value={inviteSearch}
+                  onChange={(e) => setInviteSearch(e.target.value)}
+                />
               </div>
               <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-border bg-canvas p-2">
-                {inviteCandidates.map((u) => (
-                  <li key={u.id}>
-                    <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-card">
-                      <input type="checkbox" checked={inviteModalIds.includes(u.id)} onChange={() => toggleModalInvite(u.id)} />
-                      <UserAvatar photoUrl={u.photoUrl} displayName={u.displayName} seed={u.id} size={24} />
-                      {u.username ? `@${u.username}` : u.displayName}
-                    </label>
-                  </li>
-                ))}
+                {inviteLoading ? <li className="px-2 py-2 text-xs text-text-muted">Searching...</li> : null}
+                {!inviteLoading && inviteResults.length === 0 ? <li className="px-2 py-2 text-xs text-text-muted">No users found</li> : null}
+                {!inviteLoading
+                  ? inviteResults.map((u) => (
+                      <li key={u.id}>
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-card"
+                          onClick={() => toggleModalInvite(u.id)}
+                        >
+                          <UserAvatar photoUrl={u.photoUrl} displayName={u.displayName} seed={u.id} size={28} />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-text">{u.displayName}</p>
+                            <p className="truncate text-xs text-text-muted">{u.username ? `@${u.username}` : "No username"}</p>
+                          </div>
+                          {inviteModalIds.includes(u.id) ? (
+                            <span className="ml-auto rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">Selected</span>
+                          ) : null}
+                        </button>
+                      </li>
+                    ))
+                  : null}
               </ul>
               <div className="mt-4 flex justify-end gap-2">
                 <button type="button" className="btn-ghost" onClick={() => setInviteOpen(null)}>
