@@ -1,11 +1,12 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, CalendarDays, Home, ListChecks, Users } from "lucide-react";
+import { BarChart3, CalendarDays, ClipboardList, Home, ListChecks, Users } from "lucide-react";
 import clsx from "clsx";
 
 const tabs = [
   { href: "/", icon: Home, label: "Home" },
+  { href: "/tasks", icon: ClipboardList, label: "Tasks" },
   { href: "/habits", icon: ListChecks, label: "Habits" },
   { href: "/calendar", icon: CalendarDays, label: "Cal" },
   { href: "/analytics", icon: BarChart3, label: "Stats" },

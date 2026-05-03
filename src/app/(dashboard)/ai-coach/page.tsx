@@ -6,15 +6,19 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
 import { Send } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { useAuthGate } from "@/components/auth/auth-gate-context";
 
 type ChatTurn = { role: "user" | "assistant"; text: string };
 
-const chips = [
-  "I keep skipping my habit",
-  "How to build a routine?",
-  "My streak broke",
-  "Best habits for focus",
+const chips: { label: string; detail?: boolean }[] = [
+  { label: "Analyze my productivity today", detail: true },
+  { label: "Why am I not completing tasks?" },
+  { label: "Build me a morning routine" },
+  { label: "What should I focus on right now?" },
+  { label: "Give me a full weekly report", detail: true },
+  { label: "I keep skipping my habit" },
+  { label: "How to build a routine?" },
 ];
 
 export default function AICoachPage() {
@@ -30,13 +34,16 @@ export default function AICoachPage() {
   }, []);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, opts?: { detailReport?: boolean }) => {
       const trimmed = text.trim();
       if (!trimmed) return;
       if (!session?.user) {
         toast.error("Sign in to chat with the coach.");
         return;
       }
+      const detailReport =
+        opts?.detailReport ??
+        /analyze my productivity|full weekly report|weekly report|deep dive/i.test(trimmed);
       setMessages((m) => [...m, { role: "user", text: trimmed }]);
       setInput("");
       setLoading(true);
@@ -44,7 +51,7 @@ export default function AICoachPage() {
         const res = await fetch("/api/ai/coach", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: trimmed }),
+          body: JSON.stringify({ prompt: trimmed, detailReport }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -99,10 +106,14 @@ export default function AICoachPage() {
                   className={
                     m.role === "user"
                       ? "max-w-[85%] rounded-2xl rounded-br-md bg-primary px-4 py-3 text-sm text-white shadow-lg"
-                      : "max-w-[90%] rounded-2xl rounded-bl-md border border-border-subtle bg-card px-4 py-3 text-sm text-text shadow-inner"
+                      : "max-w-[90%] rounded-2xl rounded-bl-md border border-border-subtle bg-card px-4 py-3 text-sm text-text shadow-inner [&_strong]:text-text [&_li]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5"
                   }
                 >
-                  {m.text}
+                  {m.role === "user" ? (
+                    m.text
+                  ) : (
+                    <ReactMarkdown>{m.text}</ReactMarkdown>
+                  )}
                 </div>
               </motion.div>
             ))}
@@ -123,15 +134,15 @@ export default function AICoachPage() {
           <div className="mb-2 flex flex-wrap gap-2">
             {chips.map((c) => (
               <button
-                key={c}
+                key={c.label}
                 type="button"
                 className="rounded-full border border-border-subtle bg-card px-3 py-1.5 text-xs font-medium text-text-muted transition hover:border-primary/50 hover:text-text"
                 onClick={requireAuth(() => {
-                  setInput(c);
-                  void send(c);
+                  setInput(c.label);
+                  void send(c.label, { detailReport: c.detail });
                 })}
               >
-                {c}
+                {c.label}
               </button>
             ))}
           </div>

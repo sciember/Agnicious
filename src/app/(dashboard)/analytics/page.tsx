@@ -1,7 +1,7 @@
 "use client";
 
-import { AnalyticsClient } from "@/components/analytics/analytics-client";
+import { ProductivityAnalytics } from "@/components/analytics/productivity-analytics";
 
 export default function AnalyticsPage() {
-  return <AnalyticsClient />;
+  return <ProductivityAnalytics />;
 }

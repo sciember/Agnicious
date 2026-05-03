@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   BarChart3,
   Bot,
   CalendarDays,
+  ClipboardList,
   LayoutDashboard,
   ListChecks,
   Users,
@@ -17,6 +19,7 @@ import clsx from "clsx";
 
 const mainNav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/tasks", label: "Tasks", icon: ClipboardList },
   { href: "/habits", label: "Habits", icon: ListChecks },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
@@ -72,6 +75,21 @@ function initials(name: string | null | undefined, email: string | null | undefi
 
 export function AppSidebar() {
   const { data: session } = useSession();
+  const [score, setScore] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!session?.user) {
+      setScore(null);
+      return;
+    }
+    fetch("/api/analytics/overview")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setScore(typeof d?.productivity?.score === "number" ? d.productivity.score : null))
+      .catch(() => setScore(null));
+  }, [session?.user]);
+
+  const gaugeColor =
+    score == null ? "#6366f1" : score >= 70 ? "#3ecf8e" : score >= 40 ? "#f5a623" : "#f06060";
 
   return (
     <aside className="hidden w-[220px] shrink-0 flex-col border-r border-border-subtle bg-surface md:flex">
@@ -107,6 +125,34 @@ export function AppSidebar() {
       </nav>
 
       <div className="mt-auto border-t border-border-subtle p-3">
+        {session?.user ? (
+          <div className="mb-3 flex items-center gap-3 rounded-xl border border-border-subtle bg-card/50 px-3 py-2">
+            <div className="relative h-10 w-10 shrink-0">
+              <svg viewBox="0 0 36 36" className="-rotate-90">
+                <path
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none"
+                  stroke="rgba(255,255,255,0.08)"
+                  strokeWidth="3"
+                />
+                <path
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none"
+                  stroke={gaugeColor}
+                  strokeWidth="3"
+                  strokeDasharray={`${score ?? 0}, 100`}
+                />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] font-bold text-text">
+                {score ?? "—"}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Score</p>
+              <p className="truncate text-xs text-text-muted">Productivity</p>
+            </div>
+          </div>
+        ) : null}
         <div className="flex items-center gap-3 rounded-xl bg-card/60 px-2 py-2">
           <div
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-semibold text-primary"

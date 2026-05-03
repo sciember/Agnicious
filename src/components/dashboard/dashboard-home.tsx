@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
+import clsx from "clsx";
 import {
   Bar,
   BarChart,
@@ -20,6 +21,7 @@ import { CountUp } from "@/components/ui/count-up";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthGate } from "@/components/auth/auth-gate-context";
 import { parseHabitUiMeta } from "@/lib/habit-ui-meta";
+import type { AnalyticsOverviewPayload } from "@/lib/analytics-overview";
 
 type Overview = {
   habitsCount: number;
@@ -88,6 +90,9 @@ export function DashboardHome() {
   const router = useRouter();
   const { requireAuth } = useAuthGate();
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsOverviewPayload | null>(null);
+  const [todayTasks, setTodayTasks] = useState<{ id: string; title: string; priority: string; status: string }[]>([]);
+  const [quickTask, setQuickTask] = useState("");
   const [habits, setHabits] = useState<HabitRow[]>([]);
   const [logs, setLogs] = useState<LogRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,12 +109,16 @@ export function DashboardHome() {
     }
     setLoading(true);
     const from = subDays(new Date(), 84).toISOString();
-    const [o, h, l] = await Promise.all([
+    const [o, h, l, ax, tt] = await Promise.all([
       fetch("/api/stats/overview").then((r) => (r.ok ? r.json() : null)),
       fetch("/api/habits").then((r) => (r.ok ? r.json() : [])),
       fetch(`/api/logs?from=${encodeURIComponent(from)}`).then((r) => (r.ok ? r.json() : [])),
+      fetch("/api/analytics/overview").then((r) => (r.ok ? r.json() : null)),
+      fetch("/api/tasks/today").then((r) => (r.ok ? r.json() : null)),
     ]);
     setOverview(o);
+    setAnalytics(ax);
+    setTodayTasks(Array.isArray(tt?.tasks) ? tt.tasks.slice(0, 8) : []);
     setHabits(Array.isArray(h) ? h : []);
     setLogs(Array.isArray(l) ? l : []);
     setLoading(false);
@@ -191,7 +200,32 @@ export function DashboardHome() {
     await load();
   }
 
+  async function quickAddTask() {
+    const title = quickTask.trim();
+    if (!title) return;
+    const res = await fetch("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title,
+        priority: "medium",
+        dueDate: new Date().toISOString(),
+      }),
+    });
+    if (!res.ok) {
+      toast.error("Could not add task");
+      return;
+    }
+    toast.success("Task added");
+    setQuickTask("");
+    await load();
+  }
+
   const firstName = session?.user?.name?.split(" ")[0] ?? session?.user?.name;
+  const score = analytics?.productivity.score ?? 0;
+  const scoreColor =
+    score >= 70 ? "text-success" : score >= 40 ? "text-amber" : "text-danger";
+  const focusMin = analytics?.pomodoro.totalMinutesToday ?? 0;
 
   return (
     <div className="space-y-8">
@@ -221,39 +255,121 @@ export function DashboardHome() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         {loading && session?.user ? (
           <>
-            <Skeleton className="h-28" />
-            <Skeleton className="h-28" />
-            <Skeleton className="h-28" />
-            <Skeleton className="h-28" />
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-28" />
+            ))}
           </>
         ) : (
           <>
             <StatCard
-              label="Current Streak"
-              value={overview?.currentStreak ?? 0}
-              badge={{ text: "On track", tone: "green" }}
+              label="Habit streak"
+              value={analytics?.habits.currentStreak ?? overview?.currentStreak ?? 0}
+              badge={{ text: "Habits", tone: "green" }}
             />
             <StatCard
-              label="Total Habits"
-              value={overview?.habitsCount ?? habits.length}
-              badge={{ text: "Active", tone: "blue" }}
+              label="Tasks today"
+              value={analytics?.tasks.completedToday ?? 0}
+              badge={{
+                text: `${analytics?.tasks.totalToday ?? 0} total`,
+                tone: "blue",
+              }}
             />
             <StatCard
-              label="Streak Freezes"
-              value={overview?.streakFreezes ?? 0}
-              badge={{ text: "Saved", tone: "amber" }}
+              label="Focus time"
+              value={Math.round(focusMin)}
+              badge={{ text: "min today", tone: "indigo" }}
             />
             <StatCard
-              label="XP Earned"
+              label="XP"
               value={overview?.xp ?? 0}
               badge={{ text: `Lvl ${overview?.level ?? 1}`, tone: "indigo" }}
+            />
+            <StatCard
+              label="Completion rate"
+              value={analytics?.tasks.completionRate ?? 0}
+              badge={{ text: "% tasks", tone: "amber" }}
+            />
+            <StatCard
+              label="Productivity"
+              value={score}
+              badge={{ text: "/100", tone: "green" }}
             />
           </>
         )}
       </div>
+
+      {session?.user ? (
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="app-card flex flex-col items-center justify-center py-8">
+            <p className="text-xs font-medium uppercase text-text-muted">Productivity score</p>
+            <div className="relative mt-4 h-40 w-40">
+              <svg viewBox="0 0 100 100" className="-rotate-90">
+                <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="10" />
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="42"
+                  fill="none"
+                  stroke="#6366f1"
+                  strokeWidth="10"
+                  strokeDasharray={264}
+                  strokeDashoffset={264 * (1 - score / 100)}
+                  strokeLinecap="round"
+                  className="transition-all duration-500"
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className={clsx("font-mono text-4xl font-bold", scoreColor)}>{score}</span>
+                <span className="mt-1 text-center text-[11px] text-text-muted">
+                  {analytics?.productivity.trend ?? "—"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="app-card lg:col-span-2">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold text-text">Today&apos;s tasks</h2>
+              <Link href="/tasks" className="text-sm font-medium text-primary">
+                View all tasks →
+              </Link>
+            </div>
+            <div className="mb-4 flex gap-2">
+              <input
+                className="input-field flex-1 text-sm"
+                placeholder="Quick add task…"
+                value={quickTask}
+                onChange={(e) => setQuickTask(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void quickAddTask();
+                }}
+              />
+              <button type="button" className="btn-primary shrink-0 px-4 text-sm" onClick={() => void quickAddTask()}>
+                Add
+              </button>
+            </div>
+            <ul className="space-y-2">
+              {todayTasks.slice(0, 5).map((t) => (
+                <li
+                  key={t.id}
+                  className="flex items-center justify-between rounded-xl border border-border-subtle bg-surface/40 px-3 py-2 text-sm"
+                >
+                  <span className="truncate text-text">{t.title}</span>
+                  <span className="shrink-0 rounded-full bg-primary-soft px-2 py-0.5 text-[10px] font-semibold capitalize text-primary">
+                    {t.priority}
+                  </span>
+                </li>
+              ))}
+              {todayTasks.length === 0 ? (
+                <p className="py-6 text-center text-sm text-text-muted">No tasks scheduled for today.</p>
+              ) : null}
+            </ul>
+          </div>
+        </div>
+      ) : null}
 
       {!loading && !session?.user ? (
         <div className="app-card flex flex-col items-center justify-center py-16 text-center">
