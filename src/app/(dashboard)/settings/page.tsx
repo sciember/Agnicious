@@ -4,41 +4,19 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { signOut } from "next-auth/react";
 import { AnimatePresence, motion } from "framer-motion";
 import toast from "react-hot-toast";
-import { Camera, Clock, Lock, Shield, Sparkles, Trash2 } from "lucide-react";
+import { Camera, Lock, Shield, Sparkles, Trash2 } from "lucide-react";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { publicDisplayName } from "@/lib/user-public";
+import { normalizeUsername, validateUsernameFormat } from "@/lib/username";
 
 type Profile = {
   name: string | null;
   displayName: string | null;
+  username: string | null;
   bio: string | null;
   avatarUrl: string | null;
-  image: string | null;
-  timezone: string;
-  weekStartsOn: "MONDAY" | "SUNDAY";
   emailMasked: string;
 };
-
-const TIMEZONES = [
-  "UTC",
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "America/Toronto",
-  "America/Sao_Paulo",
-  "Europe/London",
-  "Europe/Paris",
-  "Europe/Berlin",
-  "Europe/Madrid",
-  "Asia/Dubai",
-  "Asia/Kolkata",
-  "Asia/Singapore",
-  "Asia/Tokyo",
-  "Asia/Seoul",
-  "Australia/Sydney",
-  "Pacific/Auckland",
-];
 
 function sectionCard(children: React.ReactNode) {
   return (
@@ -50,18 +28,17 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
+  const [usernameState, setUsernameState] = useState<"idle" | "checking" | "ok" | "bad">("idle");
   const [bio, setBio] = useState("");
-  const [timezone, setTimezone] = useState("UTC");
-  const [weekStartsOn, setWeekStartsOn] = useState<"MONDAY" | "SUNDAY">("MONDAY");
   const [savingIdentity, setSavingIdentity] = useState(false);
-  const [savingPrefs, setSavingPrefs] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
 
   const displaySeed = useMemo(() => profile?.displayName || profile?.name || "user", [profile]);
 
-  const photoUrl = profile?.avatarUrl || profile?.image || null;
+  const photoUrl = profile?.avatarUrl || null;
   const label = publicDisplayName(profile?.displayName, profile?.name);
 
   useEffect(() => {
@@ -71,13 +48,36 @@ export default function SettingsPage() {
         if (!data) return;
         setProfile(data);
         setDisplayName(data.displayName ?? "");
+        setUsername(data.username ? `@${data.username}` : "");
         setBio(data.bio ?? "");
-        setTimezone(data.timezone || "UTC");
-        setWeekStartsOn(data.weekStartsOn === "SUNDAY" ? "SUNDAY" : "MONDAY");
       })
       .catch(() => toast.error("Could not load settings."))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    const norm = normalizeUsername(username);
+    if (!norm) {
+      setUsernameState("idle");
+      return;
+    }
+    const format = validateUsernameFormat(norm);
+    if (!format.ok) {
+      setUsernameState("bad");
+      return;
+    }
+    let cancelled = false;
+    setUsernameState("checking");
+    const id = setTimeout(async () => {
+      const r = await fetch(`/api/user/check-username?u=${encodeURIComponent(norm)}`);
+      const d = (await r.json().catch(() => null)) as { available?: boolean } | null;
+      if (!cancelled) setUsernameState(d?.available ? "ok" : "bad");
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+    };
+  }, [username]);
 
   async function saveIdentity() {
     const trimmed = displayName.trim();
@@ -86,10 +86,14 @@ export default function SettingsPage() {
       return;
     }
     setSavingIdentity(true);
-    const res = await fetch("/api/settings/profile", {
+    const res = await fetch("/api/user/profile", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ displayName: trimmed, bio: bio.slice(0, 140) || null }),
+      body: JSON.stringify({
+        displayName: trimmed,
+        username: normalizeUsername(username),
+        bio: bio.slice(0, 140) || null,
+      }),
     });
     const data = (await res.json().catch(() => null)) as Profile | { error?: string } | null;
     setSavingIdentity(false);
@@ -98,23 +102,7 @@ export default function SettingsPage() {
       return;
     }
     setProfile(data as Profile);
-    toast.success("Profile updated!");
-  }
-
-  async function savePreferences() {
-    setSavingPrefs(true);
-    const res = await fetch("/api/settings/profile", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ timezone, weekStartsOn }),
-    });
-    const data = (await res.json().catch(() => null)) as Profile | { error?: string } | null;
-    setSavingPrefs(false);
-    if (!res.ok) {
-      toast.error(data && "error" in data ? String(data.error) : "Could not save.");
-      return;
-    }
-    setProfile(data as Profile);
+    setUsername(data && "username" in data && typeof data.username === "string" ? `@${data.username}` : "");
     toast.success("Profile updated!");
   }
 
@@ -229,6 +217,30 @@ export default function SettingsPage() {
                 <p className="mt-1 text-xs text-text-muted">This replaces your real name in all community pages</p>
               </div>
               <div>
+                <label className="text-sm font-medium text-text">Username</label>
+                <input
+                  className="input-field mt-1.5"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  maxLength={21}
+                  placeholder="@username"
+                />
+                <p className="mt-1 text-xs text-text-muted">Lowercase letters, numbers, underscore · 3-20 chars</p>
+                <p
+                  className={`mt-1 text-xs ${
+                    usernameState === "ok" ? "text-green-600" : usernameState === "bad" ? "text-red-600" : "text-text-muted"
+                  }`}
+                >
+                  {usernameState === "checking"
+                    ? "Checking username…"
+                    : usernameState === "ok"
+                      ? "✓ Username available"
+                      : usernameState === "bad"
+                        ? "✗ Username taken or invalid"
+                        : "Others use this to find and invite you"}
+                </p>
+              </div>
+              <div>
                 <label className="text-sm font-medium text-text">Bio</label>
                 <p className="text-xs text-text-muted">Optional · {bio.length}/140</p>
                 <textarea
@@ -239,7 +251,12 @@ export default function SettingsPage() {
                   placeholder="A short line about your goals…"
                 />
               </div>
-              <button type="button" className="btn-primary w-full sm:w-auto" disabled={savingIdentity} onClick={() => void saveIdentity()}>
+              <button
+                type="button"
+                className="btn-primary w-full sm:w-auto"
+                disabled={savingIdentity || usernameState !== "ok"}
+                onClick={() => void saveIdentity()}
+              >
                 {savingIdentity ? "Saving…" : "Save"}
               </button>
             </div>
@@ -269,59 +286,22 @@ export default function SettingsPage() {
         {sectionCard(
           <div>
             <div className="mb-4 flex items-center gap-2">
-              <Clock className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-bold text-text">Preferences</h2>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm font-medium text-text">Week starts on</p>
-                <div className="mt-2 flex gap-2">
-                  {(["MONDAY", "SUNDAY"] as const).map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => setWeekStartsOn(d)}
-                      className={`flex-1 rounded-xl border px-3 py-2 text-sm font-semibold transition ${
-                        weekStartsOn === d ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-[#E5E7EB] bg-white text-text-muted"
-                      }`}
-                    >
-                      {d === "MONDAY" ? "Monday" : "Sunday"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-text">Timezone</label>
-                <select className="input-field mt-1.5" value={timezone} onChange={(e) => setTimezone(e.target.value)}>
-                  {TIMEZONES.map((tz) => (
-                    <option key={tz} value={tz}>
-                      {tz}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button type="button" className="btn-primary w-full sm:w-auto" disabled={savingPrefs} onClick={() => void savePreferences()}>
-                {savingPrefs ? "Saving…" : "Save"}
-              </button>
-            </div>
-          </div>,
-        )}
-
-        {sectionCard(
-          <div>
-            <div className="mb-4 flex items-center gap-2">
               <Shield className="h-4 w-4 text-danger" />
               <h2 className="text-sm font-bold text-text">Account</h2>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <button
                 type="button"
-                className="rounded-lg border-2 border-red-500 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+                className="rounded-lg border border-red-500 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
                 onClick={() => void signOut({ callbackUrl: "/" })}
               >
                 Sign out
               </button>
-              <button type="button" className="text-sm font-medium text-text-muted underline hover:text-text" onClick={() => setDeleteOpen(true)}>
+              <button
+                type="button"
+                className="rounded-lg border border-[#D1D5DB] px-4 py-2 text-sm font-medium text-text-muted transition hover:bg-[#F9FAFB] hover:text-text"
+                onClick={() => setDeleteOpen(true)}
+              >
                 Delete account
               </button>
             </div>

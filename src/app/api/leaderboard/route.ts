@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { communityPhotoUrl } from "@/lib/social-avatar";
 import { publicDisplayName } from "@/lib/user-public";
 
 export async function GET() {
@@ -8,7 +9,6 @@ export async function GET() {
       id: true,
       displayName: true,
       name: true,
-      image: true,
       avatarUrl: true,
       xp: true,
       streaks: { select: { currentCount: true } },
@@ -21,7 +21,7 @@ export async function GET() {
     leaders.map((leader) => ({
       id: leader.id,
       displayName: publicDisplayName(leader.displayName, leader.name),
-      photoUrl: leader.avatarUrl || leader.image || null,
+      photoUrl: communityPhotoUrl(leader.avatarUrl),
       xp: leader.xp,
       streakCount: leader.streaks.reduce((max, streak) => Math.max(max, streak.currentCount), 0),
     })),

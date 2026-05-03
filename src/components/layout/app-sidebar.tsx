@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   BarChart3,
+  Bell,
   Bot,
   CalendarDays,
   ClipboardList,
@@ -29,11 +30,6 @@ const mainNav = [
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
 ];
 
-const communityNav = [
-  { href: "/social", label: "Social", icon: Users },
-  { href: "/ai-coach", label: "AI Coach", icon: Bot },
-];
-
 function NavLink({
   href,
   label,
@@ -50,7 +46,7 @@ function NavLink({
     <Link
       href={href}
       className={clsx(
-        "relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
+        "relative flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
         active ? "font-medium text-text" : "text-text-muted hover:bg-canvas hover:text-text",
       )}
     >
@@ -67,11 +63,66 @@ function NavLink({
   );
 }
 
+function NotificationsNavLink() {
+  const pathname = usePathname();
+  const { data: session } = useSession();
+  const [unread, setUnread] = useState<number | null>(null);
+  const active = pathname === "/notifications" || pathname.startsWith("/notifications/");
+
+  useEffect(() => {
+    if (!session?.user) {
+      setUnread(null);
+      return;
+    }
+    let cancelled = false;
+    async function poll() {
+      const r = await fetch("/api/notifications?summary=1");
+      if (!r.ok || cancelled) return;
+      const d = (await r.json()) as { unreadCount?: number };
+      if (!cancelled) setUnread(typeof d.unreadCount === "number" ? d.unreadCount : 0);
+    }
+    void poll();
+    const id = setInterval(poll, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [session?.user]);
+
+  const badge = unread != null && unread > 0 ? (unread > 9 ? "9+" : String(unread)) : null;
+
+  return (
+    <Link
+      href="/notifications"
+      className={clsx(
+        "relative flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
+        active ? "font-medium text-text" : "text-text-muted hover:bg-canvas hover:text-text",
+      )}
+    >
+      {active ? (
+        <motion.span
+          layoutId="sidebar-active"
+          className="absolute inset-0 rounded-xl bg-canvas"
+          transition={{ type: "spring", stiffness: 380, damping: 32 }}
+        />
+      ) : null}
+      <span className="relative z-10 flex shrink-0 items-center">
+        <Bell className="h-4 w-4" strokeWidth={2} />
+        {badge ? (
+          <span className="absolute -right-1.5 -top-1 min-w-[16px] rounded-full bg-red-500 px-0.5 text-center text-[9px] font-bold leading-4 text-white">
+            {badge}
+          </span>
+        ) : null}
+      </span>
+      <span className="relative z-10">Notifications</span>
+    </Link>
+  );
+}
+
 type MeProfile = {
   displayName: string | null;
   name: string | null;
   avatarUrl: string | null;
-  image: string | null;
 };
 
 export function AppSidebar() {
@@ -99,7 +150,7 @@ export function AppSidebar() {
   const gaugeColor =
     score == null ? "#6366f1" : score >= 70 ? "#10b981" : score >= 40 ? "#f59e0b" : "#ef4444";
 
-  const photoUrl = me?.avatarUrl || me?.image || null;
+  const photoUrl = me?.avatarUrl || null;
   const label = me ? publicDisplayName(me.displayName, me.name) : publicDisplayName(session?.user?.name, session?.user?.name);
   const seed = session?.user?.id ?? "guest";
 
@@ -127,9 +178,9 @@ export function AppSidebar() {
         <div>
           <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-text-muted">Community</p>
           <div className="space-y-1">
-            {communityNav.map((item) => (
-              <NavLink key={item.href} {...item} />
-            ))}
+            <NotificationsNavLink />
+            <NavLink href="/social" label="Social" icon={Users} />
+            <NavLink href="/ai-coach" label="AI Coach" icon={Bot} />
           </div>
         </div>
       </nav>
@@ -165,9 +216,9 @@ export function AppSidebar() {
             </div>
             <Link
               href="/settings"
-              className="mb-2 flex w-full items-center gap-3 rounded-xl border border-border bg-canvas px-3 py-2.5 transition hover:border-primary/40 hover:bg-card"
+              className="mb-2 flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-xl border border-border bg-canvas px-3 py-2.5 transition hover:border-primary/40 hover:bg-card"
             >
-              <UserAvatar photoUrl={photoUrl} displayName={label} seed={seed} size={40} />
+              <UserAvatar photoUrl={photoUrl} displayName={label} seed={seed} size={40} className="shrink-0" />
               <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-text">{label}</span>
               <Settings className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
             </Link>
@@ -176,9 +227,9 @@ export function AppSidebar() {
           <button
             type="button"
             onClick={openAuthModal}
-            className="mb-2 w-full rounded-xl bg-indigo-600 px-4 py-3 text-center text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+            className="mb-2 w-full cursor-pointer rounded-xl bg-indigo-600 px-4 py-3 text-center text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
           >
-            Sign in to sync
+            Sign In
           </button>
         )}
       </div>

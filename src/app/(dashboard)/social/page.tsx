@@ -9,7 +9,7 @@ import { Plus, Search, Trophy, Users } from "lucide-react";
 import { useAuthModal } from "@/components/auth/auth-modal-context";
 import { UserAvatar } from "@/components/ui/user-avatar";
 
-type FriendUser = { id: string; displayName: string; photoUrl: string | null };
+type FriendUser = { id: string; username: string | null; displayName: string; photoUrl: string | null };
 type Friend = {
   id: string;
   status: "PENDING" | "ACCEPTED" | "BLOCKED";
@@ -49,7 +49,8 @@ export default function SocialPage() {
   const { data: session, status } = useSession();
   const { requireAuth } = useAuthModal();
   const [currentUserId, setCurrentUserId] = useState("");
-  const [targetEmail, setTargetEmail] = useState("");
+  const [targetUsername, setTargetUsername] = useState("");
+  const [targetLookup, setTargetLookup] = useState<{ found: boolean; displayName?: string } | null>(null);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [challenges, setChallenges] = useState<SocialChallenge[]>([]);
@@ -111,19 +112,37 @@ export default function SocialPage() {
   const filteredFriendsForInvite = useMemo(() => {
     const q = friendSearch.trim().toLowerCase();
     if (!q) return acceptedFriends;
-    return acceptedFriends.filter((u) => u.displayName.toLowerCase().includes(q));
+    return acceptedFriends.filter((u) => (u.username ? `@${u.username}` : u.displayName).toLowerCase().includes(q));
   }, [acceptedFriends, friendSearch]);
 
+  useEffect(() => {
+    const raw = targetUsername.trim();
+    if (!raw) {
+      setTargetLookup(null);
+      return;
+    }
+    let cancel = false;
+    const t = setTimeout(async () => {
+      const r = await fetch(`/api/user/lookup?u=${encodeURIComponent(raw)}`);
+      const d = (await r.json().catch(() => null)) as { found?: boolean; displayName?: string } | null;
+      if (!cancel) setTargetLookup(d?.found ? { found: true, displayName: d.displayName } : { found: false });
+    }, 300);
+    return () => {
+      cancel = true;
+      clearTimeout(t);
+    };
+  }, [targetUsername]);
+
   async function sendRequest() {
-    if (!targetEmail.trim()) {
-      toast.error("Enter a valid email.");
+    if (!targetUsername.trim()) {
+      toast.error("Enter @username.");
       return;
     }
     setBusy(true);
     const res = await fetch("/api/social/friends", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "request", targetEmail: targetEmail.trim().toLowerCase() }),
+      body: JSON.stringify({ action: "request", targetUsername: targetUsername.trim() }),
     });
     if (!res.ok) {
       const payload = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -131,7 +150,8 @@ export default function SocialPage() {
       setBusy(false);
       return;
     }
-    setTargetEmail("");
+    setTargetUsername("");
+    setTargetLookup(null);
     await loadAuthData();
     setBusy(false);
     toast.success("Friend request sent.");
@@ -243,7 +263,7 @@ export default function SocialPage() {
   const inviteCandidates = useMemo(() => {
     const q = inviteSearch.trim().toLowerCase();
     if (!q) return acceptedFriends;
-    return acceptedFriends.filter((u) => u.displayName.toLowerCase().includes(q));
+    return acceptedFriends.filter((u) => (u.username ? `@${u.username}` : u.displayName).toLowerCase().includes(q));
   }, [acceptedFriends, inviteSearch]);
 
   function toggleCreateInvite(id: string) {
@@ -264,13 +284,18 @@ export default function SocialPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <motion.section className="app-card space-y-4" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
           <h2 className="text-lg font-semibold text-text">Add friend</h2>
-          <p className="text-sm text-text-muted">Send a request by email (private — never shown publicly).</p>
+          <p className="text-sm text-text-muted">Send a request by @username.</p>
           <input
-            value={targetEmail}
-            onChange={(e) => setTargetEmail(e.target.value)}
-            placeholder="friend@email.com"
+            value={targetUsername}
+            onChange={(e) => setTargetUsername(e.target.value)}
+            placeholder="@username"
             className="input-field"
           />
+          {targetUsername.trim() ? (
+            <p className={`text-xs ${targetLookup?.found ? "text-green-600" : "text-red-600"}`}>
+              {targetLookup?.found ? `✓ Found: ${targetLookup.displayName}` : "✗ User not found"}
+            </p>
+          ) : null}
           <button type="button" className="btn-primary w-full sm:w-auto" onClick={requireAuth(() => void sendRequest())} disabled={busy}>
             {busy ? "Sending…" : "Send request"}
           </button>
@@ -285,11 +310,11 @@ export default function SocialPage() {
                     key={friend.id}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-canvas px-3 py-2 text-sm"
                   >
-                    <span className="flex items-center gap-2 text-text">
+                    <span className="flex min-w-0 items-center gap-2 text-text">
                       <UserAvatar photoUrl={friend.requester.photoUrl} displayName={friend.requester.displayName} seed={friend.requester.id} size={28} />
                       <span className="text-text-muted">↔</span>
                       <UserAvatar photoUrl={friend.addressee.photoUrl} displayName={friend.addressee.displayName} seed={friend.addressee.id} size={28} />
-                      <span>
+                      <span className="min-w-0 truncate whitespace-nowrap">
                         {friend.requester.displayName} ↔ {friend.addressee.displayName}
                       </span>
                     </span>
@@ -374,7 +399,7 @@ export default function SocialPage() {
                     </div>
                     <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-700">{ch.durationDays}d</span>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-2">
                     {showAvatars.map((p) => (
                       <UserAvatar key={p.id} photoUrl={p.photoUrl} displayName={p.displayName} seed={p.id} size={32} className="ring-2 ring-white" />
                     ))}
@@ -461,9 +486,9 @@ export default function SocialPage() {
                       {rank}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <UserAvatar photoUrl={row.photoUrl} displayName={row.displayName} seed={row.id} size={36} />
-                        <span className="font-medium text-text">{row.displayName}</span>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <UserAvatar photoUrl={row.photoUrl} displayName={row.displayName} seed={row.id} size={36} className="shrink-0" />
+                        <span className="min-w-0 truncate whitespace-nowrap font-medium text-text">{row.displayName}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3 font-mono text-text">{row.streakCount}</td>
@@ -496,10 +521,10 @@ export default function SocialPage() {
                   <input type="number" min={1} max={365} className="input-field mt-1" value={createDays} onChange={(e) => setCreateDays(Number(e.target.value) || 1)} />
                 </label>
                 <div>
-                  <p className="text-sm font-medium text-text">Invite friends (by display name)</p>
+                  <p className="text-sm font-medium text-text">Invite friends by @username</p>
                   <div className="relative mt-1">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
-                    <input className="input-field pl-9" placeholder="Search friends…" value={friendSearch} onChange={(e) => setFriendSearch(e.target.value)} />
+                    <input className="input-field pl-9" placeholder="@username" value={friendSearch} onChange={(e) => setFriendSearch(e.target.value)} />
                   </div>
                   <ul className="mt-2 max-h-36 space-y-1 overflow-y-auto rounded-lg border border-border bg-canvas p-2">
                     {filteredFriendsForInvite.length === 0 ? (
@@ -510,7 +535,7 @@ export default function SocialPage() {
                           <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-card">
                             <input type="checkbox" checked={createInviteIds.includes(u.id)} onChange={() => toggleCreateInvite(u.id)} />
                             <UserAvatar photoUrl={u.photoUrl} displayName={u.displayName} seed={u.id} size={24} />
-                            {u.displayName}
+                            {u.username ? `@${u.username}` : u.displayName}
                           </label>
                         </li>
                       ))
@@ -544,7 +569,7 @@ export default function SocialPage() {
               <h3 className="text-lg font-semibold text-text">Invite friends</h3>
               <div className="relative mt-3">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
-                <input className="input-field pl-9" placeholder="Search by display name…" value={inviteSearch} onChange={(e) => setInviteSearch(e.target.value)} />
+                <input className="input-field pl-9" placeholder="@username" value={inviteSearch} onChange={(e) => setInviteSearch(e.target.value)} />
               </div>
               <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-border bg-canvas p-2">
                 {inviteCandidates.map((u) => (
@@ -552,7 +577,7 @@ export default function SocialPage() {
                     <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-card">
                       <input type="checkbox" checked={inviteModalIds.includes(u.id)} onChange={() => toggleModalInvite(u.id)} />
                       <UserAvatar photoUrl={u.photoUrl} displayName={u.displayName} seed={u.id} size={24} />
-                      {u.displayName}
+                      {u.username ? `@${u.username}` : u.displayName}
                     </label>
                   </li>
                 ))}

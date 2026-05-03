@@ -42,13 +42,36 @@ export const authOptions: NextAuthOptions = {
       }
       return baseUrl;
     },
-    async jwt({ token, user }) {
-      if (user) token.sub = user.id;
+    async jwt({ token, user, trigger }) {
+      if (user) {
+        token.sub = user.id;
+        const u = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: { username: true },
+        });
+        token.username = u?.username ?? null;
+      }
+      if (trigger === "update" && token.sub) {
+        const u = await prisma.user.findUnique({
+          where: { id: token.sub },
+          select: { username: true },
+        });
+        token.username = u?.username ?? null;
+      }
       return token;
     },
     async session({ session, token }) {
       if (session.user && token.sub) {
         session.user.id = token.sub;
+        if (typeof token.username === "string" || token.username === null) {
+          session.user.username = token.username;
+        } else {
+          const u = await prisma.user.findUnique({
+            where: { id: token.sub },
+            select: { username: true },
+          });
+          session.user.username = u?.username ?? null;
+        }
       }
       return session;
     },

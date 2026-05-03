@@ -31,7 +31,7 @@ export function MobileTabBar() {
             type="button"
             onClick={() => router.push(tab.href)}
             className={clsx(
-              "flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
+              "flex flex-1 cursor-pointer flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
               active ? "text-primary" : "text-text-muted",
             )}
           >

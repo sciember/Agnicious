@@ -26,7 +26,7 @@ export function UserAvatar({
         alt=""
         width={size}
         height={size}
-        className={`shrink-0 rounded-full object-cover ${className}`}
+        className={`shrink-0 overflow-hidden rounded-full object-cover ${className}`}
         style={{ width: size, height: size }}
       />
     );
@@ -34,7 +34,7 @@ export function UserAvatar({
 
   return (
     <div
-      className={`flex shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${className}`}
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-bold text-white ${className}`}
       style={{
         width: size,
         height: size,

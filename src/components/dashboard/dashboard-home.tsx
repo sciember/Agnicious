@@ -287,6 +287,14 @@ export function DashboardHome() {
         </div>
       </div>
 
+      {session?.user && !session.user.username ? (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
+          <Link href="/setup-profile" className="font-medium underline">
+            Complete your profile to use community features →
+          </Link>
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         {loading && session?.user ? (
           <>
