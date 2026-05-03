@@ -1,4 +1,4 @@
-import { AuthGateProvider } from "@/components/auth/auth-gate-context";
+import { AuthModalProvider } from "@/components/auth/auth-modal-context";
 import { AuthModal } from "@/components/auth/auth-modal";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
@@ -7,7 +7,7 @@ import { ShellHeader } from "@/components/layout/shell-header";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <AuthGateProvider>
+    <AuthModalProvider>
       <div className="flex min-h-screen bg-background">
         <AppSidebar />
         <div className="relative flex min-h-screen flex-1 flex-col bg-canvas pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0">
@@ -19,6 +19,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <MobileTabBar />
         <AuthModal />
       </div>
-    </AuthGateProvider>
+    </AuthModalProvider>
   );
 }

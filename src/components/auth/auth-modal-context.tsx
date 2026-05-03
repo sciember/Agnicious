@@ -3,16 +3,16 @@
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 
-type AuthGateContextValue = {
+type AuthModalContextValue = {
   authModalOpen: boolean;
   setAuthModalOpen: (open: boolean) => void;
   openAuthModal: () => void;
   requireAuth: (action: () => void | Promise<void>) => () => void;
 };
 
-const AuthGateContext = createContext<AuthGateContextValue | null>(null);
+export const AuthModalContext = createContext<AuthModalContextValue | null>(null);
 
-export function AuthGateProvider({ children }: { children: React.ReactNode }) {
+export function AuthModalProvider({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const openAuthModal = useCallback(() => setAuthModalOpen(true), []);
@@ -34,11 +34,11 @@ export function AuthGateProvider({ children }: { children: React.ReactNode }) {
     [authModalOpen, openAuthModal, requireAuth],
   );
 
-  return <AuthGateContext.Provider value={value}>{children}</AuthGateContext.Provider>;
+  return <AuthModalContext.Provider value={value}>{children}</AuthModalContext.Provider>;
 }
 
-export function useAuthGate() {
-  const ctx = useContext(AuthGateContext);
-  if (!ctx) throw new Error("useAuthGate must be used within AuthGateProvider");
+export function useAuthModal() {
+  const ctx = useContext(AuthModalContext);
+  if (!ctx) throw new Error("useAuthModal must be used within AuthModalProvider");
   return ctx;
 }

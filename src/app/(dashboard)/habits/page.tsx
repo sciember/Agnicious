@@ -14,7 +14,7 @@ import {
   Snowflake,
 } from "lucide-react";
 import clsx from "clsx";
-import { useAuthGate } from "@/components/auth/auth-gate-context";
+import { useAuthModal } from "@/components/auth/auth-modal-context";
 import { Skeleton } from "@/components/ui/skeleton";
 import { parseHabitUiMeta, serializeHabitUiMeta } from "@/lib/habit-ui-meta";
 
@@ -42,7 +42,7 @@ const defaultForm = {
 
 export default function HabitsPage() {
   const { data: session } = useSession();
-  const { requireAuth } = useAuthGate();
+  const { requireAuth } = useAuthModal();
   const [habits, setHabits] = useState<Habit[]>([]);
   const [logs, setLogs] = useState<LogRow[]>([]);
   const [loading, setLoading] = useState(true);

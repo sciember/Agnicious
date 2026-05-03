@@ -10,7 +10,7 @@ import { ChevronLeft, ChevronRight, MoreHorizontal, Trash2, Pencil } from "lucid
 import clsx from "clsx";
 import { PomodoroTimer } from "./pomodoro-timer";
 import { parseHabitUiMeta } from "@/lib/habit-ui-meta";
-import { useAuthGate } from "@/components/auth/auth-gate-context";
+import { useAuthModal } from "@/components/auth/auth-modal-context";
 
 type Project = {
   id: string;
@@ -48,7 +48,7 @@ function priorityLabel(p: string) {
 
 export function TasksPageClient() {
   const { data: session } = useSession();
-  const { requireAuth } = useAuthGate();
+  const { requireAuth } = useAuthModal();
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [habits, setHabits] = useState<HabitMini[]>([]);

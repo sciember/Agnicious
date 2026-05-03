@@ -42,6 +42,17 @@ enum FriendStatus {
   BLOCKED
 }
 
+enum WeekStart {
+  MONDAY
+  SUNDAY
+}
+
+enum ChallengeParticipantStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
 model User {
   id                String      @id @default(cuid())
   email             String      @unique
@@ -49,8 +60,11 @@ model User {
   passwordHash      String?
   name              String?
   displayName       String?
+  bio               String?
   image             String?
+  avatarUrl         String?
   timezone          String      @default("UTC")
+  weekStartsOn      WeekStart   @default(MONDAY)
   level             Int         @default(1)
   xp                Int         @default(0)
   streakFreezeCount Int         @default(1)
@@ -71,6 +85,8 @@ model User {
   projects          Project[]
   tasks             Task[]
   pomodoroSessions  PomodoroSession[]
+  createdSocialChallenges SocialChallenge[] @relation("SocialChallengeCreator")
+  socialChallengeParticipants SocialChallengeParticipant[]
 }
 
 model Project {
@@ -238,6 +254,35 @@ model UserChallenge {
   challenge    Challenge   @relation(fields: [challengeId], references: [id], onDelete: Cascade)
 
   @@unique([userId, challengeId])
+}
+
+model SocialChallenge {
+  id           String   @id @default(cuid())
+  creatorId    String
+  title        String
+  description  String?
+  durationDays Int
+  createdAt    DateTime @default(now())
+
+  creator      User                         @relation("SocialChallengeCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  participants SocialChallengeParticipant[]
+
+  @@index([creatorId])
+}
+
+model SocialChallengeParticipant {
+  id           String                     @id @default(cuid())
+  challengeId  String
+  userId       String
+  status       ChallengeParticipantStatus @default(PENDING)
+  progressDays Int                        @default(0)
+  completedAt  DateTime?
+
+  challenge SocialChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId])
+  @@index([userId])
 }
 
 model Friend {

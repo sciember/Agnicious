@@ -1,11 +1,11 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useAuthGate } from "@/components/auth/auth-gate-context";
+import { useAuthModal } from "@/components/auth/auth-modal-context";
 
 export function ShellHeader() {
   const { data: session, status } = useSession();
-  const { openAuthModal } = useAuthGate();
+  const { openAuthModal } = useAuthModal();
 
   return (
     <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-end border-b border-border bg-surface/90 px-4 backdrop-blur-md">

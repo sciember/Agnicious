@@ -17,6 +17,9 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import clsx from "clsx";
+import { useAuthModal } from "@/components/auth/auth-modal-context";
+import { UserAvatar } from "@/components/ui/user-avatar";
+import { publicDisplayName } from "@/lib/user-public";
 
 const mainNav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -64,41 +67,47 @@ function NavLink({
   );
 }
 
-function initials(name: string | null | undefined, email: string | null | undefined) {
-  if (name?.trim()) {
-    const parts = name.trim().split(/\s+/);
-    const s = (parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "");
-    return s.toUpperCase() || "?";
-  }
-  if (email) return email.slice(0, 2).toUpperCase();
-  return "?";
-}
+type MeProfile = {
+  displayName: string | null;
+  name: string | null;
+  avatarUrl: string | null;
+  image: string | null;
+};
 
 export function AppSidebar() {
   const { data: session } = useSession();
+  const { openAuthModal } = useAuthModal();
   const [score, setScore] = useState<number | null>(null);
+  const [me, setMe] = useState<MeProfile | null>(null);
 
   useEffect(() => {
     if (!session?.user) {
       setScore(null);
+      setMe(null);
       return;
     }
     fetch("/api/analytics/overview")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setScore(typeof d?.productivity?.score === "number" ? d.productivity.score : null))
       .catch(() => setScore(null));
+    fetch("/api/settings/profile")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((p: MeProfile | null) => setMe(p))
+      .catch(() => setMe(null));
   }, [session?.user]);
 
   const gaugeColor =
     score == null ? "#6366f1" : score >= 70 ? "#10b981" : score >= 40 ? "#f59e0b" : "#ef4444";
 
+  const photoUrl = me?.avatarUrl || me?.image || null;
+  const label = me ? publicDisplayName(me.displayName, me.name) : publicDisplayName(session?.user?.name, session?.user?.name);
+  const seed = session?.user?.id ?? "guest";
+
   return (
     <aside className="hidden w-[220px] shrink-0 flex-col border-r border-border bg-surface md:flex">
       <div className="flex flex-col gap-2 border-b border-border p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
-            A
-          </div>
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">A</div>
           <div>
             <p className="text-sm font-semibold leading-tight text-text">Agnicious</p>
             <p className="text-xs text-text-muted">Build better habits</p>
@@ -126,49 +135,52 @@ export function AppSidebar() {
       </nav>
 
       <div className="mt-auto border-t border-border p-3">
-        <div className="mb-3">
-          <NavLink href="/settings" label="Settings" icon={Settings} />
-        </div>
         {session?.user ? (
-          <div className="mb-3 flex items-center gap-3 rounded-xl border border-border bg-canvas px-3 py-2">
-            <div className="relative h-10 w-10 shrink-0">
-              <svg viewBox="0 0 36 36" className="-rotate-90">
-                <path
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                  fill="none"
-                  stroke="#E5E7EB"
-                  strokeWidth="3"
-                />
-                <path
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                  fill="none"
-                  stroke={gaugeColor}
-                  strokeWidth="3"
-                  strokeDasharray={`${score ?? 0}, 100`}
-                />
-              </svg>
-              <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] font-bold text-text">
-                {score ?? "—"}
-              </span>
+          <>
+            <div className="mb-3 flex items-center gap-3 rounded-xl border border-border bg-canvas px-3 py-2">
+              <div className="relative h-10 w-10 shrink-0">
+                <svg viewBox="0 0 36 36" className="-rotate-90">
+                  <path
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                    fill="none"
+                    stroke="#E5E7EB"
+                    strokeWidth="3"
+                  />
+                  <path
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                    fill="none"
+                    stroke={gaugeColor}
+                    strokeWidth="3"
+                    strokeDasharray={`${score ?? 0}, 100`}
+                  />
+                </svg>
+                <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] font-bold text-text">
+                  {score ?? "—"}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Score</p>
+                <p className="truncate text-xs text-text-muted">Productivity</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Score</p>
-              <p className="truncate text-xs text-text-muted">Productivity</p>
-            </div>
-          </div>
-        ) : null}
-        <div className="flex items-center gap-3 rounded-xl bg-canvas px-2 py-2">
-          <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-semibold text-primary"
-            aria-hidden
+            <Link
+              href="/settings"
+              className="mb-2 flex w-full items-center gap-3 rounded-xl border border-border bg-canvas px-3 py-2.5 transition hover:border-primary/40 hover:bg-card"
+            >
+              <UserAvatar photoUrl={photoUrl} displayName={label} seed={seed} size={40} />
+              <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-text">{label}</span>
+              <Settings className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
+            </Link>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={openAuthModal}
+            className="mb-2 w-full rounded-xl bg-indigo-600 px-4 py-3 text-center text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
           >
-            {initials(session?.user?.name, session?.user?.email)}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-text">{session?.user?.name || "Guest"}</p>
-            <p className="truncate text-xs text-text-muted">{session?.user?.email ?? "Not signed in"}</p>
-          </div>
-        </div>
+            Sign in to sync
+          </button>
+        )}
       </div>
     </aside>
   );

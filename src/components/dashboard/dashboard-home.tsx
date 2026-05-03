@@ -20,7 +20,7 @@ import {
 } from "recharts";
 import { CountUp } from "@/components/ui/count-up";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAuthGate } from "@/components/auth/auth-gate-context";
+import { useAuthModal } from "@/components/auth/auth-modal-context";
 import { parseHabitUiMeta } from "@/lib/habit-ui-meta";
 import type { AnalyticsOverviewPayload } from "@/lib/analytics-overview";
 
@@ -89,7 +89,7 @@ function weekDots(
 export function DashboardHome() {
   const { data: session } = useSession();
   const router = useRouter();
-  const { requireAuth } = useAuthGate();
+  const { requireAuth } = useAuthModal();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsOverviewPayload | null>(null);
   const [todayTasks, setTodayTasks] = useState<{ id: string; title: string; priority: string; status: string }[]>([]);

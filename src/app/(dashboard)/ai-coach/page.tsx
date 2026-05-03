@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { Send } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { useAuthGate } from "@/components/auth/auth-gate-context";
+import { useAuthModal } from "@/components/auth/auth-modal-context";
 
 type ChatTurn = { role: "user" | "assistant"; text: string };
 
@@ -20,7 +20,7 @@ const chips: { label: string; detail?: boolean }[] = [
 ];
 
 export default function AICoachPage() {
-  const { requireAuth } = useAuthGate();
+  const { requireAuth } = useAuthModal();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatTurn[]>([]);
   const [loading, setLoading] = useState(false);

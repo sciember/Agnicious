@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { publicDisplayName } from "@/lib/user-public";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -13,8 +14,8 @@ export async function GET() {
       OR: [{ requesterId: session.user.id }, { addresseeId: session.user.id }],
     },
     include: {
-      requester: { select: { id: true, displayName: true, name: true, image: true } },
-      addressee: { select: { id: true, displayName: true, name: true, image: true } },
+      requester: { select: { id: true, displayName: true, name: true, image: true, avatarUrl: true } },
+      addressee: { select: { id: true, displayName: true, name: true, image: true, avatarUrl: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -24,13 +25,13 @@ export async function GET() {
       ...friend,
       requester: {
         id: friend.requester.id,
-        displayName: friend.requester.displayName ?? friend.requester.name ?? "User",
-        image: friend.requester.image,
+        displayName: publicDisplayName(friend.requester.displayName, friend.requester.name),
+        photoUrl: friend.requester.avatarUrl || friend.requester.image || null,
       },
       addressee: {
         id: friend.addressee.id,
-        displayName: friend.addressee.displayName ?? friend.addressee.name ?? "User",
-        image: friend.addressee.image,
+        displayName: publicDisplayName(friend.addressee.displayName, friend.addressee.name),
+        photoUrl: friend.addressee.avatarUrl || friend.addressee.image || null,
       },
     })),
   );

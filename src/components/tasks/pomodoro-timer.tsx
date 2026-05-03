@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useSession } from "next-auth/react";
 import clsx from "clsx";
-import { useAuthGate } from "@/components/auth/auth-gate-context";
+import { useAuthModal } from "@/components/auth/auth-modal-context";
 
 type Mode = "focus" | "short" | "long";
 
@@ -27,7 +27,7 @@ export function PomodoroTimer(props: {
 }) {
   const { linkedTaskId, linkedTaskTitle, onSessionComplete } = props;
   const { data: session } = useSession();
-  const { openAuthModal } = useAuthGate();
+  const { openAuthModal } = useAuthModal();
   const [mode, setMode] = useState<Mode>("focus");
   const [remaining, setRemaining] = useState(MODE_SEC.focus);
   const [running, setRunning] = useState(false);
