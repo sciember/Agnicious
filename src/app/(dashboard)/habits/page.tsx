@@ -1,78 +1,161 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { format, startOfDay, subDays } from "date-fns";
+import { AnimatePresence, motion } from "framer-motion";
+import Link from "next/link";
+import { useSession } from "next-auth/react";
+import toast from "react-hot-toast";
+import {
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  BarChart3,
+  Snowflake,
+} from "lucide-react";
+import clsx from "clsx";
+import { useAuthGate } from "@/components/auth/auth-gate-context";
+import { Skeleton } from "@/components/ui/skeleton";
+import { parseHabitUiMeta, serializeHabitUiMeta } from "@/lib/habit-ui-meta";
 
 type Habit = {
   id: string;
   title: string;
-  type: string;
+  description: string | null;
+  type: "DAILY" | "WEEKLY" | "MONTHLY";
   repeatPattern: string;
-  lifeArea: string;
+  lifeArea: "HEALTH" | "CAREER" | "MIND";
 };
 
-type Prediction = Record<string, number>;
+type LogRow = { habitId: string; date: string; status: string };
 
-const defaultHabit = {
+const EMOJIS = ["🔥", "💧", "📚", "🏃", "🧘", "💤", "🍎", "✨"];
+const ACCENTS = ["#6366f1", "#3ecf8e", "#60a5fa", "#f5a623", "#f06060", "#a78bfa", "#ec4899", "#14b8a6"];
+
+const defaultForm = {
   title: "",
-  description: "",
-  type: "DAILY",
-  repeatPattern: "EVERYDAY",
-  customWeekdays: [],
-  lifeArea: "HEALTH",
+  lifeArea: "HEALTH" as Habit["lifeArea"],
+  frequency: "daily" as "daily" | "weekly",
+  emoji: "🔥",
+  accent: "#6366f1",
 };
 
 export default function HabitsPage() {
+  const { data: session } = useSession();
+  const { requireAuth } = useAuthGate();
   const [habits, setHabits] = useState<Habit[]>([]);
-  const [form, setForm] = useState(defaultHabit);
-  const [insights, setInsights] = useState<Record<string, string>>({});
-  const [predictions, setPredictions] = useState<Prediction>({});
+  const [logs, setLogs] = useState<LogRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [formOpen, setFormOpen] = useState(false);
+  const [form, setForm] = useState(defaultForm);
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState({ title: "", lifeArea: "HEALTH" as Habit["lifeArea"] });
 
-  async function loadHabits() {
-    const res = await fetch("/api/habits");
-    if (!res.ok) throw new Error("Failed to load habits");
-    setHabits(await res.json());
+  const load = useCallback(async () => {
+    if (!session?.user?.id) {
+      setHabits([]);
+      setLogs([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const from = subDays(new Date(), 120).toISOString();
+    const [h, l] = await Promise.all([
+      fetch("/api/habits").then((r) => (r.ok ? r.json() : [])),
+      fetch(`/api/logs?from=${encodeURIComponent(from)}`).then((r) => (r.ok ? r.json() : [])),
+    ]);
+    setHabits(Array.isArray(h) ? h : []);
+    setLogs(Array.isArray(l) ? l : []);
+    setLoading(false);
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const logsByDay = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    for (const log of logs) {
+      if (log.status !== "DONE") continue;
+      const key = format(new Date(log.date), "yyyy-MM-dd");
+      if (!m.has(key)) m.set(key, new Set());
+      m.get(key)!.add(log.habitId);
+    }
+    return m;
+  }, [logs]);
+
+  const todayKey = format(startOfDay(new Date()), "yyyy-MM-dd");
+
+  function weekDots(habitId: string) {
+    const days = Array.from({ length: 7 }, (_, i) => subDays(startOfDay(new Date()), 6 - i));
+    return days.map((d) => {
+      const key = format(d, "yyyy-MM-dd");
+      const done = logsByDay.get(key)?.has(habitId);
+      const isToday = key === todayKey;
+      return { key, done, isToday };
+    });
+  }
+
+  function progressApprox(habitId: string) {
+    let hit = 0;
+    for (const d of weekDots(habitId)) {
+      if (d.done) hit += 1;
+    }
+    return Math.round((hit / 7) * 100);
   }
 
   async function createHabit() {
     if (!form.title.trim()) {
-      setError("Habit title is required.");
+      toast.error("Name is required.");
       return;
     }
     setSubmitting(true);
-    setError(null);
+    const description = serializeHabitUiMeta({ emoji: form.emoji, accent: form.accent });
+    const body = {
+      title: form.title.trim(),
+      description,
+      type: form.frequency === "daily" ? "DAILY" : "WEEKLY",
+      repeatPattern: "EVERYDAY",
+      customWeekdays: [] as number[],
+      lifeArea: form.lifeArea,
+    };
     const res = await fetch("/api/habits", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify(body),
     });
+    setSubmitting(false);
     if (!res.ok) {
-      setError("Could not create habit.");
-      setSubmitting(false);
+      toast.error("Could not create habit.");
       return;
     }
-    setForm(defaultHabit);
-    await loadHabits();
-    setSubmitting(false);
-    setMessage("Habit created successfully.");
+    toast.success("Habit created successfully");
+    setForm(defaultForm);
+    setFormOpen(false);
+    await load();
   }
 
-  async function logStatus(habitId: string, status: "DONE" | "SKIP" | "FAIL") {
-    setError(null);
-    await fetch("/api/logs", {
+  async function logDone(habitId: string) {
+    const res = await fetch("/api/logs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ habitId, status, date: new Date().toISOString() }),
+      body: JSON.stringify({
+        habitId,
+        status: "DONE",
+        date: new Date().toISOString(),
+      }),
     });
-    await loadHabits();
-    setMessage(`Habit marked ${status.toLowerCase()}.`);
+    if (!res.ok) {
+      toast.error("Could not log habit.");
+      return;
+    }
+    toast.success("Habit logged! 🔥 Keep it up");
+    await load();
   }
 
   async function applyFreeze(habitId: string) {
-    setError(null);
     const res = await fetch("/api/streak/freeze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -80,100 +163,381 @@ export default function HabitsPage() {
     });
     if (!res.ok) {
       const payload = (await res.json().catch(() => null)) as { error?: string } | null;
-      setError(payload?.error ?? "Unable to apply freeze.");
+      toast.error(payload?.error ?? "Unable to use freeze.");
       return;
     }
-    setMessage("Streak freeze applied.");
+    toast("Streak freeze used!", { icon: "❄️" });
+    await load();
   }
 
-  async function runFailureAnalysis(habitId: string) {
-    const res = await fetch("/api/ai/failure-analysis", {
-      method: "POST",
+  async function deleteHabit(id: string) {
+    const res = await fetch(`/api/habits/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      toast.error("Could not delete.");
+      return;
+    }
+    toast.success("Habit archived.");
+    setMenuOpenId(null);
+    await load();
+  }
+
+  async function saveEdit(id: string, description: string | null) {
+    const res = await fetch(`/api/habits/${id}`, {
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ habitId }),
+      body: JSON.stringify({
+        title: editDraft.title.trim(),
+        lifeArea: editDraft.lifeArea,
+        description,
+      }),
     });
-    const data = await res.json();
-    setInsights((p) => ({ ...p, [habitId]: data.analysis ?? "No analysis available." }));
-    setMessage("Failure analysis updated.");
+    if (!res.ok) {
+      toast.error("Could not save.");
+      return;
+    }
+    toast.success("Habit updated.");
+    setEditId(null);
+    await load();
   }
 
-  async function fetchPrediction(habitId: string) {
-    const res = await fetch(`/api/ai/prediction?habitId=${habitId}`);
-    const data = await res.json();
-    setPredictions((p) => ({ ...p, [habitId]: Number(data.breakProbability ?? 0) }));
-    setMessage("Break risk updated.");
-  }
-
-  useEffect(() => {
-    fetch("/api/habits")
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data: Habit[]) => setHabits(data))
-      .catch(() => {
-        setHabits([]);
-        setError("Could not load habits.");
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  const openNewForm = requireAuth(() => setFormOpen(true));
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Habits</h1>
-      {message ? <div className="app-card border-emerald-900 text-emerald-300">{message}</div> : null}
-      {error ? <div className="app-card border-rose-900 text-rose-300">{error}</div> : null}
-      <div className="app-card space-y-3">
-        <h2 className="text-lg font-semibold">Create Habit</h2>
-        <input
-          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2"
-          placeholder="Habit title"
-          value={form.title}
-          onChange={(e) => setForm((s) => ({ ...s, title: e.target.value }))}
-        />
-        <button
-          onClick={createHabit}
-          disabled={submitting}
-          className="rounded-lg bg-indigo-500 px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-text md:text-3xl">Habits</h1>
+          <p className="mt-1 text-sm text-text-muted">Create routines, track streaks, stay consistent.</p>
+        </div>
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.98 }}
+          className="btn-primary self-start px-5"
+          onClick={openNewForm}
         >
-          {submitting ? "Saving..." : "Save Habit"}
-        </button>
+          + New Habit
+        </motion.button>
       </div>
-      {loading ? <div className="app-card text-zinc-400">Loading habits...</div> : null}
-      <div className="grid gap-3">
-        {habits.map((habit) => (
-          <div key={habit.id} className="app-card">
-            <p className="font-semibold">{habit.title}</p>
-            <p className="text-sm text-zinc-400">
-              {habit.type} • {habit.repeatPattern} • {habit.lifeArea}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button className="rounded-md bg-emerald-600 px-2 py-1 text-sm" onClick={() => logStatus(habit.id, "DONE")}>
-                Done
-              </button>
-              <button className="rounded-md bg-amber-600 px-2 py-1 text-sm" onClick={() => logStatus(habit.id, "SKIP")}>
-                Skip
-              </button>
-              <button className="rounded-md bg-rose-600 px-2 py-1 text-sm" onClick={() => logStatus(habit.id, "FAIL")}>
-                Fail
-              </button>
-              <button className="rounded-md border border-zinc-700 px-2 py-1 text-sm" onClick={() => applyFreeze(habit.id)}>
-                Use Freeze
-              </button>
-              <button className="rounded-md border border-zinc-700 px-2 py-1 text-sm" onClick={() => runFailureAnalysis(habit.id)}>
-                Failure Analysis
-              </button>
-              <button className="rounded-md border border-zinc-700 px-2 py-1 text-sm" onClick={() => fetchPrediction(habit.id)}>
-                Break Risk
-              </button>
+
+      <AnimatePresence initial={false}>
+        {formOpen ? (
+          <motion.section
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="app-card space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-lg font-semibold text-text">New habit</h2>
+                <button type="button" className="text-sm text-text-muted hover:text-text" onClick={() => setFormOpen(false)}>
+                  Close
+                </button>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium text-text-muted">Name</span>
+                  <input
+                    className="input-field"
+                    value={form.title}
+                    onChange={(e) => setForm((s) => ({ ...s, title: e.target.value }))}
+                    placeholder="Morning run"
+                  />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium text-text-muted">Category</span>
+                  <select
+                    className="input-field"
+                    value={form.lifeArea}
+                    onChange={(e) =>
+                      setForm((s) => ({ ...s, lifeArea: e.target.value as Habit["lifeArea"] }))
+                    }
+                  >
+                    <option value="HEALTH">Health</option>
+                    <option value="CAREER">Career</option>
+                    <option value="MIND">Mind</option>
+                  </select>
+                </label>
+              </div>
+              <div>
+                <span className="text-xs font-medium text-text-muted">Frequency</span>
+                <div className="mt-2 flex rounded-xl border border-border-subtle bg-surface p-1">
+                  {(
+                    [
+                      ["daily", "Daily"],
+                      ["weekly", "Weekly"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={clsx(
+                        "flex-1 rounded-lg py-2 text-sm font-medium transition",
+                        form.frequency === key ? "bg-primary text-white shadow-sm" : "text-text-muted hover:text-text",
+                      )}
+                      onClick={() => setForm((s) => ({ ...s, frequency: key }))}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <span className="text-xs font-medium text-text-muted">Emoji</span>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {EMOJIS.map((e) => (
+                    <button
+                      key={e}
+                      type="button"
+                      onClick={() => setForm((s) => ({ ...s, emoji: e }))}
+                      className={clsx(
+                        "flex h-10 w-10 items-center justify-center rounded-xl border text-lg transition",
+                        form.emoji === e
+                          ? "border-primary bg-primary-soft"
+                          : "border-border-subtle bg-card hover:border-primary/40",
+                      )}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <span className="text-xs font-medium text-text-muted">Accent</span>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {ACCENTS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      aria-label={`Color ${c}`}
+                      className={clsx(
+                        "h-8 w-8 rounded-full border-2 transition",
+                        form.accent === c ? "border-white ring-2 ring-primary ring-offset-2 ring-offset-surface" : "border-transparent",
+                      )}
+                      style={{ backgroundColor: c }}
+                      onClick={() => setForm((s) => ({ ...s, accent: c }))}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 pt-2">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={submitting}
+                  onClick={requireAuth(() => void createHabit())}
+                >
+                  {submitting ? "Saving…" : "Save"}
+                </button>
+                <button type="button" className="btn-ghost" onClick={() => setFormOpen(false)} disabled={submitting}>
+                  Cancel
+                </button>
+              </div>
             </div>
-            {predictions[habit.id] !== undefined ? (
-              <p className="mt-2 text-sm text-zinc-300">Break probability: {Math.round(predictions[habit.id] * 100)}%</p>
-            ) : null}
-            {insights[habit.id] ? (
-              <p className="mt-2 rounded-md border border-zinc-800 bg-zinc-950 p-2 text-sm text-zinc-300">{insights[habit.id]}</p>
-            ) : null}
+          </motion.section>
+        ) : null}
+      </AnimatePresence>
+
+      {loading ? (
+        <div className="space-y-3">
+          <Skeleton className="h-28 w-full" />
+          <Skeleton className="h-28 w-full" />
+        </div>
+      ) : null}
+
+      {!loading && !session?.user ? (
+        <div className="app-card flex flex-col items-center justify-center py-16 text-center">
+          <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary-soft text-4xl" aria-hidden>
+            🔒
           </div>
-        ))}
+          <p className="max-w-sm text-text-muted">Sign in to create and track habits.</p>
+          <Link href="/sign-in" className="btn-primary mt-6">
+            Sign In
+          </Link>
+        </div>
+      ) : null}
+
+      {!loading && session?.user && habits.length === 0 ? (
+        <div className="app-card flex flex-col items-center justify-center py-20 text-center">
+          <div
+            className="mb-6 flex h-28 w-28 items-center justify-center rounded-2xl border border-dashed border-primary/40 bg-primary-soft/40"
+            aria-hidden
+          >
+            <span className="text-5xl">🌱</span>
+          </div>
+          <h2 className="text-lg font-semibold text-text">Create your first habit</h2>
+          <p className="mt-2 max-w-md text-sm text-text-muted">
+            Small steps compound. Pick one habit, keep it visible, and log it daily.
+          </p>
+          <motion.button type="button" className="btn-primary mt-6 px-6" whileTap={{ scale: 0.98 }} onClick={openNewForm}>
+            + New Habit
+          </motion.button>
+        </div>
+      ) : null}
+
+      <div className="space-y-3">
+        {!loading &&
+          session?.user &&
+          habits.map((habit) => {
+            const meta = parseHabitUiMeta(habit.description);
+            const dots = weekDots(habit.id);
+            const pct = progressApprox(habit.id);
+            const doneToday = logs.some(
+              (l) =>
+                l.habitId === habit.id &&
+                l.status === "DONE" &&
+                format(new Date(l.date), "yyyy-MM-dd") === todayKey,
+            );
+            const menuOpen = menuOpenId === habit.id;
+            const editing = editId === habit.id;
+
+            return (
+              <div key={habit.id} className="app-card relative">
+                {editing ? (
+                  <div className="space-y-3">
+                    <input
+                      className="input-field"
+                      value={editDraft.title}
+                      onChange={(e) => setEditDraft((d) => ({ ...d, title: e.target.value }))}
+                    />
+                    <select
+                      className="input-field"
+                      value={editDraft.lifeArea}
+                      onChange={(e) =>
+                        setEditDraft((d) => ({ ...d, lifeArea: e.target.value as Habit["lifeArea"] }))
+                      }
+                    >
+                      <option value="HEALTH">Health</option>
+                      <option value="CAREER">Career</option>
+                      <option value="MIND">Mind</option>
+                    </select>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        onClick={() =>
+                          void saveEdit(habit.id, habit.description)
+                        }
+                      >
+                        Save
+                      </button>
+                      <button type="button" className="btn-ghost" onClick={() => setEditId(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <div
+                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-xl"
+                        style={{ backgroundColor: `${meta.accent}22`, color: meta.accent }}
+                      >
+                        {meta.emoji}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate font-semibold text-text">{habit.title}</p>
+                          <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-medium text-primary">
+                            {habit.lifeArea}
+                          </span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-3">
+                          <span className="text-xs text-text-muted">
+                            Streak-ready · <span className="font-mono text-text">{pct}%</span> week
+                          </span>
+                          <div className="flex gap-1">
+                            {dots.map((d) => (
+                              <span
+                                key={d.key}
+                                className={clsx(
+                                  "h-2.5 w-2.5 rounded-full border",
+                                  d.done ? "border-success/30 bg-success" : "border-border-subtle bg-card",
+                                  d.isToday && !d.done ? "ring-2 ring-primary ring-offset-2 ring-offset-card" : "",
+                                )}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface">
+                          <motion.div
+                            className="h-full rounded-full"
+                            style={{ backgroundColor: meta.accent }}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${pct}%` }}
+                            transition={{ duration: 0.35 }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 md:flex-col md:items-end lg:flex-row lg:items-center">
+                      <motion.button
+                        type="button"
+                        whileTap={{ scale: 0.9 }}
+                        className="flex h-11 w-11 items-center justify-center rounded-full border border-border-subtle bg-surface text-lg text-primary hover:bg-primary-soft disabled:opacity-40"
+                        disabled={doneToday}
+                        onClick={requireAuth(() => void logDone(habit.id))}
+                        aria-label="Log done"
+                      >
+                        ✓
+                      </motion.button>
+                      <div className="relative">
+                        <button
+                          type="button"
+                          className="flex h-11 w-11 items-center justify-center rounded-full border border-border-subtle bg-card text-text-muted hover:text-text"
+                          aria-label="Menu"
+                          onClick={() => setMenuOpenId(menuOpen ? null : habit.id)}
+                        >
+                          <MoreHorizontal className="h-5 w-5" />
+                        </button>
+                        {menuOpen ? (
+                          <div className="absolute right-0 top-full z-20 mt-2 w-48 rounded-xl border border-border-subtle bg-card py-1 shadow-xl">
+                            <button
+                              type="button"
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text hover:bg-surface"
+                              onClick={() => {
+                                setEditDraft({ title: habit.title, lifeArea: habit.lifeArea });
+                                setEditId(habit.id);
+                                setMenuOpenId(null);
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" /> Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text hover:bg-surface"
+                              onClick={() => void deleteHabit(habit.id)}
+                            >
+                              <Trash2 className="h-4 w-4" /> Delete
+                            </button>
+                            <Link
+                              href="/analytics"
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text hover:bg-surface"
+                              onClick={() => setMenuOpenId(null)}
+                            >
+                              <BarChart3 className="h-4 w-4" /> Stats
+                            </Link>
+                            <button
+                              type="button"
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text hover:bg-surface"
+                              onClick={() => {
+                                setMenuOpenId(null);
+                                void applyFreeze(habit.id);
+                              }}
+                            >
+                              <Snowflake className="h-4 w-4" /> Use streak freeze
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
       </div>
-      {!loading && habits.length === 0 ? <div className="app-card text-zinc-500">No habits yet. Create your first habit.</div> : null}
     </div>
   );
 }
