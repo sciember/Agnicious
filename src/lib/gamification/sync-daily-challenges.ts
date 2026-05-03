@@ -1,5 +1,6 @@
 import { HabitStatus } from "@prisma/client";
 import { endOfDay, startOfDay } from "date-fns";
+import { FEATURE_SHOP_AND_BADGES } from "@/lib/feature-gamification";
 import { prisma } from "@/lib/prisma";
 import { refreshUserLevelFromXp } from "@/lib/gamification/award-badge";
 import { getDailyChallengesForDate } from "@/lib/gamification/daily-challenges";
@@ -159,8 +160,9 @@ export async function syncUserDailyChallenges(userId: string, d = new Date()): P
         where: { id: userId },
         data: {
           xp: { increment: ch.xpReward },
-          coins: { increment: 20 },
+          ...(FEATURE_SHOP_AND_BADGES ? { coins: { increment: 20 } } : {}),
         },
+        select: { id: true },
       });
       await refreshUserLevelFromXp(userId);
       out.push({

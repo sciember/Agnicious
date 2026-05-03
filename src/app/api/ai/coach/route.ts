@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
+import { FEATURE_SHOP_AND_BADGES } from "@/lib/feature-gamification";
 import { buildCoachSystemPrompt } from "@/lib/ai/coach-system-prompt";
 import { buildAnalyticsOverview } from "@/lib/analytics-overview";
 import { BADGE_BY_CODE } from "@/lib/gamification/badges";
@@ -94,17 +95,18 @@ export async function POST(request: Request) {
       data.choices?.[0]?.message?.content ??
       "Focus on one keystone habit daily and track it right after completion.";
 
-    // Narrow `select` so Prisma does not RETURNING missing columns (e.g. `coins` if migrations lag on prod).
-    const afterTurn = await prisma.user.update({
-      where: { id: session.user.id },
-      data: { aiCoachTurns: { increment: 1 } },
-      select: { aiCoachTurns: true },
-    });
     let newBadge: { code: string; title: string; description: string } | null = null;
-    if (afterTurn.aiCoachTurns >= 10) {
-      const def = BADGE_BY_CODE["AI_CURIOUS"];
-      if (def) {
-        newBadge = await tryAwardBadge(session.user.id, def.code, def.title, def.description, def.xpReward);
+    if (FEATURE_SHOP_AND_BADGES) {
+      const afterTurn = await prisma.user.update({
+        where: { id: session.user.id },
+        data: { aiCoachTurns: { increment: 1 } },
+        select: { aiCoachTurns: true },
+      });
+      if (afterTurn.aiCoachTurns >= 10) {
+        const def = BADGE_BY_CODE["AI_CURIOUS"];
+        if (def) {
+          newBadge = await tryAwardBadge(session.user.id, def.code, def.title, def.description, def.xpReward);
+        }
       }
     }
 

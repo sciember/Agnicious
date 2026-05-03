@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
+import { FEATURE_SHOP_AND_BADGES } from "@/lib/feature-gamification";
 import { prisma } from "@/lib/prisma";
 
 function escapeCsvField(value: string | null | undefined): string {
@@ -48,11 +49,11 @@ export async function GET(request: Request) {
         weekStartsOn: true,
         level: true,
         xp: true,
-        coins: true,
-        aiCoachTurns: true,
         streakFreezeCount: true,
-        shopUnlocks: true,
         onboardingGoal: true,
+        ...(FEATURE_SHOP_AND_BADGES
+          ? { coins: true, aiCoachTurns: true, shopUnlocks: true }
+          : {}),
         onboardingCompleted: true,
         defaultReminderTime: true,
         createdAt: true,

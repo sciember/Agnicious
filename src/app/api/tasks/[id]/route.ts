@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
+import { FEATURE_SHOP_AND_BADGES } from "@/lib/feature-gamification";
 import { refreshUserLevelFromXp } from "@/lib/gamification/award-badge";
 import { evaluateBadgesAfterTaskDone } from "@/lib/gamification/evaluate-badges";
 import { syncUserDailyChallenges } from "@/lib/gamification/sync-daily-challenges";
@@ -87,8 +88,9 @@ export async function PATCH(request: Request, { params }: Params) {
       where: { id: session.user.id },
       data: {
         xp: { increment: 15 },
-        coins: { increment: 10 },
+        ...(FEATURE_SHOP_AND_BADGES ? { coins: { increment: 10 } } : {}),
       },
+      select: { id: true },
     });
     await refreshUserLevelFromXp(session.user.id);
     const newBadges = await evaluateBadgesAfterTaskDone(session.user.id);
@@ -100,7 +102,7 @@ export async function PATCH(request: Request, { params }: Params) {
     gamification = {
       newBadges,
       xp: u?.xp ?? 0,
-      coinsEarned: 10,
+      coinsEarned: FEATURE_SHOP_AND_BADGES ? 10 : 0,
       level: u?.level ?? 1,
     };
   }

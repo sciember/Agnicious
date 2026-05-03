@@ -2,6 +2,7 @@ import { HabitStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
+import { FEATURE_SHOP_AND_BADGES } from "@/lib/feature-gamification";
 import { levelProgress01, xpToNextLevel } from "@/lib/gamification/xp-level";
 import { prisma } from "@/lib/prisma";
 
@@ -15,7 +16,9 @@ export async function GET() {
     prisma.streak.findMany({ where: { userId: session.user.id } }),
     prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { xp: true, level: true, streakFreezeCount: true, coins: true },
+      select: FEATURE_SHOP_AND_BADGES
+        ? { xp: true, level: true, streakFreezeCount: true, coins: true }
+        : { xp: true, level: true, streakFreezeCount: true },
     }),
     prisma.userAchievement.count({ where: { userId: session.user.id } }),
   ]);
@@ -30,7 +33,7 @@ export async function GET() {
     xp,
     level: user?.level ?? 1,
     streakFreezes: user?.streakFreezeCount ?? 0,
-    coins: user?.coins ?? 0,
+    coins: FEATURE_SHOP_AND_BADGES ? (user && "coins" in user ? user.coins : 0) : 0,
     xpToNext: xpToNextLevel(xp),
     levelProgress: levelProgress01(xp),
     badges,

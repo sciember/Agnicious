@@ -13,7 +13,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { SkeletonCard } from "@/components/ui/skeleton-card";
 import { parseHabitUiMeta } from "@/lib/habit-ui-meta";
 import { useAuthModal } from "@/components/auth/auth-modal-context";
-import { BadgeEarnedModal, type BadgeEarned } from "@/components/gamification/badge-earned-modal";
 import { LevelUpModal } from "@/components/gamification/level-up-modal";
 
 type Project = {
@@ -68,7 +67,6 @@ export function TasksPageClient() {
   const [menuTaskId, setMenuTaskId] = useState<string | null>(null);
   const [linkedTask, setLinkedTask] = useState<{ id: string; title: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [badgeEarned, setBadgeEarned] = useState<BadgeEarned | null>(null);
   const [levelUpOpen, setLevelUpOpen] = useState(false);
   const [levelUpLevel, setLevelUpLevel] = useState(1);
   const prevLevelRef = useRef<number | null>(null);
@@ -357,17 +355,11 @@ export function TasksPageClient() {
       return;
     }
     const raw = (await res.json()) as TaskRow & {
-      gamification?: { newBadges?: BadgeEarned[]; level?: number };
+      gamification?: { newBadges?: { title: string }[]; level?: number };
     };
     const { gamification, ...taskRaw } = raw;
     setTasks((ts) => ts.map((t) => (t.id === task.id ? mergeServerTask(taskRaw, optimistic) : t)));
     if (next === "done" && gamification) {
-      if (gamification.newBadges?.length) {
-        setBadgeEarned(gamification.newBadges[0]);
-        for (let i = 1; i < gamification.newBadges.length; i++) {
-          toast.success(`Badge: ${gamification.newBadges[i].title}`);
-        }
-      }
       const gl = gamification.level;
       if (typeof gl === "number") {
         if (prevLevelRef.current !== null && gl > prevLevelRef.current) {
@@ -851,7 +843,6 @@ export function TasksPageClient() {
         ) : null}
       </aside>
     </div>
-    <BadgeEarnedModal badge={badgeEarned} onClose={() => setBadgeEarned(null)} />
     <LevelUpModal open={levelUpOpen} level={levelUpLevel} onClose={() => setLevelUpOpen(false)} />
     </>
   );

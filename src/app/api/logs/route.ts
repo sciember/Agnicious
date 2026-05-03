@@ -2,6 +2,7 @@ import { HabitStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
+import { FEATURE_SHOP_AND_BADGES } from "@/lib/feature-gamification";
 import { refreshUserLevelFromXp } from "@/lib/gamification/award-badge";
 import { evaluateBadgesAfterHabitDone } from "@/lib/gamification/evaluate-badges";
 import { syncUserDailyChallenges } from "@/lib/gamification/sync-daily-challenges";
@@ -95,14 +96,16 @@ export async function POST(request: Request) {
       where: { id: session.user.id },
       data: {
         xp: { increment: 10 },
-        coins: { increment: 5 },
+        ...(FEATURE_SHOP_AND_BADGES ? { coins: { increment: 5 } } : {}),
       },
+      select: { id: true },
     });
 
     if (doneCount > 0 && doneCount % 7 === 0) {
       await prisma.user.update({
         where: { id: session.user.id },
         data: { streakFreezeCount: { increment: 1 } },
+        select: { id: true },
       });
     }
 
@@ -135,7 +138,7 @@ export async function POST(request: Request) {
     summary = {
       newBadges,
       xp: u?.xp ?? 0,
-      coinsEarned: 5,
+      coinsEarned: FEATURE_SHOP_AND_BADGES ? 5 : 0,
       level: u?.level ?? 1,
     };
   }

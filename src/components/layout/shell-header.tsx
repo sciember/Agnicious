@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useAuthModal } from "@/components/auth/auth-modal-context";
+import { FEATURE_SHOP_AND_BADGES } from "@/lib/feature-gamification";
 
 type HeaderStats = { xp: number; level: number; coins: number };
 
@@ -38,9 +39,11 @@ export function ShellHeader() {
             Lvl <span className="font-semibold text-text">{stats.level}</span>
           </span>
           <span className="hidden sm:inline">{stats.xp} XP</span>
-          <span className="truncate">
-            🪙 <span className="font-semibold text-text">{stats.coins}</span>
-          </span>
+          {FEATURE_SHOP_AND_BADGES ? (
+            <span className="truncate">
+              🪙 <span className="font-semibold text-text">{stats.coins}</span>
+            </span>
+          ) : null}
         </div>
       ) : (
         <span />

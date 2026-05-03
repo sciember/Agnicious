@@ -1,5 +1,6 @@
 import { HabitStatus } from "@prisma/client";
 import { endOfDay, startOfDay } from "date-fns";
+import { FEATURE_SHOP_AND_BADGES } from "@/lib/feature-gamification";
 import { prisma } from "@/lib/prisma";
 import { BADGE_BY_CODE } from "@/lib/gamification/badges";
 import { refreshUserLevelFromXp, tryAwardBadge, type NewBadgePayload } from "@/lib/gamification/award-badge";
@@ -12,6 +13,10 @@ export async function evaluateBadgesAfterHabitDone(
     prevStreakCurrentCount: number;
   },
 ): Promise<NewBadgePayload[]> {
+  if (!FEATURE_SHOP_AND_BADGES) {
+    return [];
+  }
+
   const earned: NewBadgePayload[] = [];
 
   async function push(code: string) {
@@ -130,6 +135,10 @@ export async function evaluateBadgesAfterHabitDone(
 }
 
 export async function evaluateBadgesAfterMoodLog(userId: string): Promise<NewBadgePayload[]> {
+  if (!FEATURE_SHOP_AND_BADGES) {
+    return [];
+  }
+
   const earned: NewBadgePayload[] = [];
   const moodCount = await prisma.moodLog.count({ where: { userId } });
   if (moodCount >= 7) {
@@ -144,6 +153,10 @@ export async function evaluateBadgesAfterMoodLog(userId: string): Promise<NewBad
 }
 
 export async function evaluateBadgesAfterTaskDone(userId: string): Promise<NewBadgePayload[]> {
+  if (!FEATURE_SHOP_AND_BADGES) {
+    return [];
+  }
+
   const earned: NewBadgePayload[] = [];
   const doneTasks = await prisma.task.count({ where: { userId, status: "done" } });
   if (doneTasks >= 50) {

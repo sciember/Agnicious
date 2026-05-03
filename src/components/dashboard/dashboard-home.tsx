@@ -19,7 +19,6 @@ import {
   YAxis,
 } from "recharts";
 import { useAuthModal } from "@/components/auth/auth-modal-context";
-import { BadgeEarnedModal, type BadgeEarned } from "@/components/gamification/badge-earned-modal";
 import { LevelUpModal } from "@/components/gamification/level-up-modal";
 import type { XpFloatItem } from "@/components/gamification/xp-float-label";
 import { XpFloatLayer } from "@/components/gamification/xp-float-label";
@@ -31,6 +30,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SkeletonCard } from "@/components/ui/skeleton-card";
 import { fireHabitConfetti } from "@/lib/confetti-burst";
 import { parseHabitUiMeta } from "@/lib/habit-ui-meta";
+import { FEATURE_SHOP_AND_BADGES } from "@/lib/feature-gamification";
 import { levelDisplayName } from "@/lib/gamification/levels";
 import type { AnalyticsOverviewPayload } from "@/lib/analytics-overview";
 
@@ -133,9 +133,7 @@ export function DashboardHome() {
   const [levelUpOpen, setLevelUpOpen] = useState(false);
   const [levelUpLevel, setLevelUpLevel] = useState(1);
   const prevLevelRef = useRef<number | null>(null);
-  const [badgeEarned, setBadgeEarned] = useState<BadgeEarned | null>(null);
   const [challenges, setChallenges] = useState<DailyChallengeRow[]>([]);
-  const [topBadgeTitles, setTopBadgeTitles] = useState<string[]>([]);
   const [moodToday, setMoodToday] = useState<{ moodScore: number } | null>(null);
 
   const todayKey = format(startOfDay(new Date()), "yyyy-MM-dd");
@@ -146,7 +144,6 @@ export function DashboardHome() {
       setHabits([]);
       setLogs([]);
       setChallenges([]);
-      setTopBadgeTitles([]);
       setMoodToday(null);
       setLoading(false);
       return;
@@ -154,14 +151,13 @@ export function DashboardHome() {
     setLoading(true);
     try {
       const from = subDays(new Date(), 84).toISOString();
-      const [o, h, l, ax, tt, ch, bd, mo] = await Promise.all([
+      const [o, h, l, ax, tt, ch, mo] = await Promise.all([
         fetch("/api/stats/overview").then((r) => (r.ok ? r.json() : null)),
         fetch("/api/habits").then((r) => (r.ok ? r.json() : [])),
         fetch(`/api/logs?from=${encodeURIComponent(from)}`).then((r) => (r.ok ? r.json() : [])),
         fetch("/api/analytics/overview").then((r) => (r.ok ? r.json() : null)),
         fetch("/api/tasks/today").then((r) => (r.ok ? r.json() : null)),
         fetch("/api/gamification/daily-challenges").then((r) => (r.ok ? r.json() : { challenges: [] })),
-        fetch("/api/gamification/badges").then((r) => (r.ok ? r.json() : { earned: [] })),
         fetch("/api/mood").then((r) => (r.ok ? r.json() : { todayLog: null })),
       ]);
       setOverview(o);
@@ -170,11 +166,6 @@ export function DashboardHome() {
       setHabits(Array.isArray(h) ? h : []);
       setLogs(Array.isArray(l) ? l : []);
       setChallenges(Array.isArray(ch.challenges) ? ch.challenges : []);
-      setTopBadgeTitles(
-        Array.isArray(bd.earned)
-          ? bd.earned.slice(0, 3).map((e: { achievement: { title: string } }) => e.achievement.title)
-          : [],
-      );
       setMoodToday(
         mo?.todayLog && typeof mo.todayLog.moodScore === "number"
           ? { moodScore: mo.todayLog.moodScore }
@@ -302,19 +293,11 @@ export function DashboardHome() {
       habitId: string;
       date: string;
       status: LogRow["status"];
-      gamification?: { newBadges?: BadgeEarned[] };
     };
     setLogs((l) => [
       ...l.filter((x) => x.id !== pendingLogId),
       { id: payload.id, habitId: payload.habitId, date: payload.date, status: payload.status },
     ]);
-    const nb = payload.gamification?.newBadges;
-    if (nb?.length) {
-      setBadgeEarned(nb[0]);
-      for (let i = 1; i < nb.length; i++) {
-        toast.success(`Badge: ${nb[i].title}`);
-      }
-    }
     fireHabitConfetti(sourceEl);
     if (sourceEl) {
       const r = sourceEl.getBoundingClientRect();
@@ -336,16 +319,8 @@ export function DashboardHome() {
     }
     const payload = (await res.json()) as {
       moodScore: number;
-      gamification?: { newBadges?: BadgeEarned[]; level?: number };
     };
     setMoodToday({ moodScore: payload.moodScore });
-    const nb = payload.gamification?.newBadges;
-    if (nb?.length) {
-      setBadgeEarned(nb[0]);
-      for (let i = 1; i < nb.length; i++) {
-        toast.success(`Badge: ${nb[i].title}`);
-      }
-    }
     toast.success("Mood saved");
     void load();
   }
@@ -401,7 +376,6 @@ export function DashboardHome() {
     <div className="space-y-8">
       <XpFloatLayer items={xpFloats} />
       <LevelUpModal open={levelUpOpen} level={levelUpLevel} onClose={() => setLevelUpOpen(false)} />
-      <BadgeEarnedModal badge={badgeEarned} onClose={() => setBadgeEarned(null)} />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-2xl font-semibold tracking-tight text-text md:text-3xl">
@@ -517,7 +491,7 @@ export function DashboardHome() {
                     <> · max level</>
                   )}
                 </p>
-                {typeof overview.coins === "number" ? (
+                {FEATURE_SHOP_AND_BADGES && typeof overview.coins === "number" ? (
                   <p className="mt-1 text-xs text-text-muted">
                     🪙 <span className="font-mono font-semibold text-text">{overview.coins}</span> coins
                   </p>
@@ -559,9 +533,6 @@ export function DashboardHome() {
           <div className="app-card lg:col-span-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-text">Today&apos;s challenges</h2>
-              <Link href="/shop" className="text-[11px] font-medium text-primary">
-                Spend coins →
-              </Link>
             </div>
             {loading && challenges.length === 0 ? (
               <div className="mt-3 space-y-2">
@@ -591,20 +562,6 @@ export function DashboardHome() {
               </ul>
             )}
           </div>
-        </div>
-      ) : null}
-
-      {session?.user && topBadgeTitles.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold text-text-muted">Top badges</span>
-          {topBadgeTitles.map((t) => (
-            <span key={t} className="rounded-full bg-primary-soft px-3 py-1 text-xs font-medium text-primary">
-              {t}
-            </span>
-          ))}
-          <Link href="/badges" className="text-xs font-medium text-primary">
-            View all →
-          </Link>
         </div>
       ) : null}
 

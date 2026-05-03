@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { useAuthModal } from "@/components/auth/auth-modal-context";
-import { BadgeEarnedModal, type BadgeEarned } from "@/components/gamification/badge-earned-modal";
 import { LevelUpModal } from "@/components/gamification/level-up-modal";
 import type { XpFloatItem } from "@/components/gamification/xp-float-label";
 import { XpFloatLayer } from "@/components/gamification/xp-float-label";
@@ -61,7 +60,6 @@ export default function HabitsPage() {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState({ title: "", lifeArea: "HEALTH" as Habit["lifeArea"] });
-  const [badgeEarned, setBadgeEarned] = useState<BadgeEarned | null>(null);
   const [xpFloats, setXpFloats] = useState<XpFloatItem[]>([]);
   const [levelUpOpen, setLevelUpOpen] = useState(false);
   const [levelUpLevel, setLevelUpLevel] = useState(1);
@@ -261,7 +259,7 @@ export default function HabitsPage() {
       habitId: string;
       date: string;
       status: string;
-      gamification?: { newBadges?: BadgeEarned[]; level?: number };
+      gamification?: { newBadges?: { title: string }[]; level?: number };
     };
     setLogs((l) => [
       ...l.filter(
@@ -274,13 +272,6 @@ export default function HabitsPage() {
       ),
       { habitId: payload.habitId, date: payload.date, status: payload.status },
     ]);
-    const nb = payload.gamification?.newBadges;
-    if (nb?.length) {
-      setBadgeEarned(nb[0]);
-      for (let i = 1; i < nb.length; i++) {
-        toast.success(`Badge: ${nb[i].title}`);
-      }
-    }
     const gl = payload.gamification?.level;
     if (typeof gl === "number") {
       if (prevLevelRef.current !== null && gl > prevLevelRef.current) {
@@ -786,7 +777,6 @@ export default function HabitsPage() {
       </div>
     </div>
     <XpFloatLayer items={xpFloats} />
-    <BadgeEarnedModal badge={badgeEarned} onClose={() => setBadgeEarned(null)} />
     <LevelUpModal open={levelUpOpen} level={levelUpLevel} onClose={() => setLevelUpOpen(false)} />
     </>
   );

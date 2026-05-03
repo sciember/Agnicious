@@ -14,8 +14,6 @@ import {
   LayoutDashboard,
   ListChecks,
   Settings,
-  ShoppingBag,
-  Trophy,
   Users,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -43,8 +41,6 @@ const prefetchRoutes = [
   "/ai-coach",
   "/notifications",
   "/settings",
-  "/badges",
-  "/shop",
 ];
 
 function NavLink({
@@ -206,8 +202,6 @@ export function AppSidebar() {
             <NotificationsNavLink />
             <NavLink href="/social" label="Social" icon={Users} />
             <NavLink href="/ai-coach" label="AI Coach" icon={Bot} />
-            <NavLink href="/badges" label="Badges" icon={Trophy} />
-            <NavLink href="/shop" label="Shop" icon={ShoppingBag} />
           </div>
         </div>
       </nav>
