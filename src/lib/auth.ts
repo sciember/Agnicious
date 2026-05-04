@@ -96,7 +96,7 @@ export const authOptions: NextAuthOptions = {
         const email = user.email ?? (typeof profile?.email === "string" ? profile.email : null);
         if (!email) {
           console.error("[next-auth][signIn] Google profile missing email", { profile });
-          return "/sign-in?error=OAuthEmailMissing";
+          return false;
         }
         const persisted = await upsertOAuthUserByEmail({
           email,
@@ -104,15 +104,14 @@ export const authOptions: NextAuthOptions = {
           image: user.image ?? (typeof googleProfile?.picture === "string" ? googleProfile.picture : null),
         });
         if (!persisted) {
-          return "/sign-in?error=OAuthPersistFailed";
-        }
-        if (!persisted.username) {
-          return "/setup-profile";
+          // Do not block login if enrichment/upsert fails; adapter flow may still succeed.
+          console.error("[next-auth][signIn] upsert returned null, continuing auth flow");
         }
         return true;
       } catch (error) {
         console.error("[next-auth][signIn callback]", error);
-        return "/sign-in?error=Callback";
+        // Never throw/cancel auth from callback instrumentation.
+        return true;
       }
     },
     async redirect({ url, baseUrl }) {
