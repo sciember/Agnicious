@@ -1,17 +1,16 @@
 import { HabitStatus } from "@prisma/client";
-import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
-import { authOptions } from "@/lib/auth";
 import { FEATURE_SHOP_AND_BADGES } from "@/lib/feature-gamification";
 import { refreshUserLevelFromXp } from "@/lib/gamification/award-badge";
 import { evaluateBadgesAfterHabitDone } from "@/lib/gamification/evaluate-badges";
 import { syncUserDailyChallenges } from "@/lib/gamification/sync-daily-challenges";
 import { prisma } from "@/lib/prisma";
+import { resolveAuthUser } from "@/lib/server-auth-user";
 import { habitLogSchema } from "@/lib/validations/habit";
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authUser = await resolveAuthUser();
+  if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
   const from = searchParams.get("from");
@@ -19,7 +18,7 @@ export async function GET(request: Request) {
 
   const logs = await prisma.habitLog.findMany({
     where: {
-      userId: session.user.id,
+      userId: authUser.id,
       date: {
         gte: from ? new Date(from) : undefined,
         lte: to ? new Date(to) : undefined,
@@ -31,8 +30,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authUser = await resolveAuthUser();
+  if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
   const parsed = habitLogSchema.safeParse(body);
@@ -40,7 +39,7 @@ export async function POST(request: Request) {
 
   const date = new Date(parsed.data.date);
   const previousStreak = await prisma.streak.findFirst({
-    where: { habitId: parsed.data.habitId, userId: session.user.id },
+    where: { habitId: parsed.data.habitId, userId: authUser.id },
     select: { currentCount: true, longestCount: true },
   });
 
@@ -65,7 +64,7 @@ export async function POST(request: Request) {
     : await prisma.habitLog.create({
         data: {
           habitId: parsed.data.habitId,
-          userId: session.user.id,
+          userId: authUser.id,
           date,
           status: parsed.data.status as HabitStatus,
           note: parsed.data.note,
@@ -75,10 +74,10 @@ export async function POST(request: Request) {
       });
 
   const doneCount = await prisma.habitLog.count({
-    where: { habitId: parsed.data.habitId, userId: session.user.id, status: HabitStatus.DONE },
+    where: { habitId: parsed.data.habitId, userId: authUser.id, status: HabitStatus.DONE },
   });
   await prisma.streak.updateMany({
-    where: { habitId: parsed.data.habitId, userId: session.user.id },
+    where: { habitId: parsed.data.habitId, userId: authUser.id },
     data: {
       currentCount: parsed.data.status === "DONE" ? doneCount : 0,
       longestCount: Math.max(doneCount, previousStreak?.longestCount ?? 0),
@@ -93,7 +92,7 @@ export async function POST(request: Request) {
   if (parsed.data.status === "DONE") {
     const completedAt = new Date();
     await prisma.user.update({
-      where: { id: session.user.id },
+      where: { id: authUser.id },
       data: {
         xp: { increment: 10 },
         ...(FEATURE_SHOP_AND_BADGES ? { coins: { increment: 5 } } : {}),
@@ -103,21 +102,21 @@ export async function POST(request: Request) {
 
     if (doneCount > 0 && doneCount % 7 === 0) {
       await prisma.user.update({
-        where: { id: session.user.id },
+        where: { id: authUser.id },
         data: { streakFreezeCount: { increment: 1 } },
         select: { id: true },
       });
     }
 
-    await refreshUserLevelFromXp(session.user.id);
+    await refreshUserLevelFromXp(authUser.id);
 
-    newBadges = await evaluateBadgesAfterHabitDone(session.user.id, {
+    newBadges = await evaluateBadgesAfterHabitDone(authUser.id, {
       completedAt,
       doneCountForHabit: doneCount,
       prevStreakCurrentCount: previousStreak?.currentCount ?? 0,
     });
 
-    await syncUserDailyChallenges(session.user.id).catch(() => undefined);
+    await syncUserDailyChallenges(authUser.id).catch(() => undefined);
 
     const habit = await prisma.habit.findUnique({
       where: { id: parsed.data.habitId },
@@ -125,14 +124,14 @@ export async function POST(request: Request) {
     });
     await prisma.activity.create({
       data: {
-        userId: session.user.id,
+        userId: authUser.id,
         message: `Completed habit: ${habit?.title ?? "Habit"}`,
         metadata: { habitId: parsed.data.habitId, status: parsed.data.status },
       },
     });
 
     const u = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: authUser.id },
       select: { xp: true, level: true },
     });
     summary = {
@@ -144,7 +143,7 @@ export async function POST(request: Request) {
   }
 
   const activeChallenges = await prisma.userChallenge.findMany({
-    where: { userId: session.user.id, completedAt: null },
+    where: { userId: authUser.id, completedAt: null },
     select: {
       id: true,
       challenge: { select: { durationDays: true } },
@@ -153,7 +152,7 @@ export async function POST(request: Request) {
   for (const challenge of activeChallenges) {
     const progress = await prisma.habitLog.count({
       where: {
-        userId: session.user.id,
+        userId: authUser.id,
         status: HabitStatus.DONE,
         date: {
           gte: new Date(Date.now() - challenge.challenge.durationDays * 24 * 60 * 60 * 1000),

@@ -1,10 +1,9 @@
-import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { endOfDay, startOfDay } from "date-fns";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { resolveAuthUser } from "@/lib/server-auth-user";
 
 const priorityEnum = z.enum(["low", "medium", "high", "urgent"]);
 const statusEnum = z.enum(["todo", "inprogress", "done"]);
@@ -20,15 +19,15 @@ const createSchema = z.object({
 });
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authUser = await resolveAuthUser();
+  if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
   const projectId = searchParams.get("projectId");
   const status = searchParams.get("status");
   const dateStr = searchParams.get("date");
 
-  const and: Prisma.TaskWhereInput[] = [{ userId: session.user.id }];
+  const and: Prisma.TaskWhereInput[] = [{ userId: authUser.id }];
 
   if (projectId) and.push({ projectId });
   if (status && ["todo", "inprogress", "done"].includes(status)) {
@@ -61,8 +60,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authUser = await resolveAuthUser();
+  if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json().catch(() => null);
   const parsed = createSchema.safeParse(body);
@@ -71,7 +70,7 @@ export async function POST(request: Request) {
   const data = parsed.data;
   if (data.projectId) {
     const proj = await prisma.project.findFirst({
-      where: { id: data.projectId, userId: session.user.id },
+      where: { id: data.projectId, userId: authUser.id },
       select: { id: true },
     });
     if (!proj) return NextResponse.json({ error: "Invalid project" }, { status: 400 });
@@ -79,7 +78,7 @@ export async function POST(request: Request) {
 
   const task = await prisma.task.create({
     data: {
-      userId: session.user.id,
+      userId: authUser.id,
       title: data.title.trim(),
       description: data.description?.trim() || null,
       priority: data.priority ?? "medium",
