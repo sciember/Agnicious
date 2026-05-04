@@ -14,6 +14,8 @@ import {
   LayoutDashboard,
   ListChecks,
   Settings,
+  ShoppingBag,
+  Trophy,
   Users,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -22,6 +24,7 @@ import clsx from "clsx";
 import { useAuthModal } from "@/components/auth/auth-modal-context";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { publicDisplayName } from "@/lib/user-public";
+import { FEATURE_SHOP_AND_BADGES } from "@/lib/feature-gamification";
 
 const mainNav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -139,7 +142,7 @@ type MeProfile = {
 };
 
 export function AppSidebar() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const { openAuthModal } = useAuthModal();
   const router = useRouter();
   const [score, setScore] = useState<number | null>(null);
@@ -169,7 +172,9 @@ export function AppSidebar() {
     score == null ? "#6366f1" : score >= 70 ? "#10b981" : score >= 40 ? "#f59e0b" : "#ef4444";
 
   const photoUrl = me?.avatarUrl || null;
-  const label = me ? publicDisplayName(me.displayName, me.name) : publicDisplayName(session?.user?.name, session?.user?.name);
+  const label = me
+    ? publicDisplayName(me.displayName, me.name)
+    : publicDisplayName(session?.user?.name, session?.user?.name);
   const seed = session?.user?.id ?? "guest";
 
   return (
@@ -202,12 +207,20 @@ export function AppSidebar() {
             <NotificationsNavLink />
             <NavLink href="/social" label="Social" icon={Users} />
             <NavLink href="/ai-coach" label="AI Coach" icon={Bot} />
+            {FEATURE_SHOP_AND_BADGES ? (
+              <>
+                <NavLink href="/badges" label="Badges" icon={Trophy} />
+                <NavLink href="/shop" label="Shop" icon={ShoppingBag} />
+              </>
+            ) : null}
           </div>
         </div>
       </nav>
 
       <div className="mt-auto border-t border-border p-3">
-        {session?.user ? (
+        {status === "loading" ? (
+          <div className="h-[46px] w-full rounded-xl bg-canvas" aria-hidden />
+        ) : session?.user ? (
           <>
             <div className="mb-3 flex items-center gap-3 rounded-xl border border-border bg-canvas px-3 py-2">
               <div className="relative h-10 w-10 shrink-0">

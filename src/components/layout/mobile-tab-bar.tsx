@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { BarChart3, CalendarDays, ClipboardList, Home, ListChecks, Users } from "lucide-react";
+import { Bot, CalendarDays, ClipboardList, Home, ListChecks, Users } from "lucide-react";
 import clsx from "clsx";
 
 const tabs = [
@@ -11,7 +11,7 @@ const tabs = [
   { href: "/tasks", icon: ClipboardList, label: "Tasks" },
   { href: "/habits", icon: ListChecks, label: "Habits" },
   { href: "/calendar", icon: CalendarDays, label: "Cal" },
-  { href: "/analytics", icon: BarChart3, label: "Stats" },
+  { href: "/ai-coach", icon: Bot, label: "Coach" },
   { href: "/social", icon: Users, label: "Social" },
 ];
 

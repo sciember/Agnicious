@@ -109,6 +109,7 @@ export default function SocialPage() {
 
   const loading =
     status === "loading" || (session?.user && (friends === undefined || feed === undefined || challenges === undefined));
+  const [feedTimedOut, setFeedTimedOut] = useState(false);
   const [busy, setBusy] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState<string | null>(null);
@@ -130,6 +131,19 @@ export default function SocialPage() {
       .filter((f) => f.status === "ACCEPTED")
       .map((f) => (f.requesterId === currentUserId ? f.addressee : f.requester));
   }, [friends, currentUserId]);
+
+  useEffect(() => {
+    if (!session?.user) {
+      setFeedTimedOut(false);
+      return;
+    }
+    if (feed !== undefined) {
+      setFeedTimedOut(false);
+      return;
+    }
+    const id = window.setTimeout(() => setFeedTimedOut(true), 3000);
+    return () => window.clearTimeout(id);
+  }, [session?.user, feed]);
 
   useEffect(() => {
     const raw = targetUsername.trim().replace(/^@+/, "");
@@ -477,19 +491,19 @@ export default function SocialPage() {
           <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
             {!session?.user ? (
               <p className="text-sm text-text-muted">Sign in to see your activity.</p>
-            ) : loading ? (
+            ) : loading && !feedTimedOut ? (
               <div className="space-y-2">
                 {[0, 1, 2, 3].map((i) => (
                   <div key={i} className="h-20 animate-pulse rounded-xl bg-canvas" />
                 ))}
               </div>
-            ) : (feed ?? []).length === 0 ? (
+            ) : feedTimedOut || (feed ?? []).length === 0 ? (
               <EmptyState
                 illustration="journey"
-                title="Your journey starts here"
-                description="Complete habits and tasks — your activity feed will showcase wins to friends."
-                ctaLabel="+ Add a habit"
-                ctaHref="/habits"
+                title="No activity yet"
+                description="No activity yet. Add friends to see their progress!"
+                ctaLabel="Add friends"
+                onCta={() => document.getElementById("social-friend-search")?.focus()}
               />
             ) : (
               (feed ?? []).map((item) => (

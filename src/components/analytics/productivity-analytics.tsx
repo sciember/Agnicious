@@ -400,7 +400,15 @@ export function ProductivityAnalytics() {
                     </RadialBarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <p className="py-12 text-center text-sm text-text-muted">No habits yet.</p>
+                  <div className="py-8">
+                    <EmptyState
+                      illustration="chart"
+                      title="No habits yet"
+                      description="Add a habit and log a few days — this chart will fill in automatically."
+                      ctaLabel="+ Add your first habit"
+                      ctaHref="/habits"
+                    />
+                  </div>
                 )}
               </div>
             </ChartCard>
@@ -521,7 +529,15 @@ export function ProductivityAnalytics() {
                   </div>
                 </>
               ) : (
-                <p className="py-12 text-center text-sm text-text-muted">No task data.</p>
+                <div className="py-8">
+                  <EmptyState
+                    illustration="tasks"
+                    title="No task data yet"
+                    description="Create a task (and mark some done) to unlock your task mix insights."
+                    ctaLabel="+ Add your first task"
+                    ctaHref="/tasks"
+                  />
+                </div>
               )}
             </div>
           </ChartCard>

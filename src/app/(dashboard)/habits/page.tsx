@@ -23,6 +23,7 @@ import { XpFloatLayer } from "@/components/gamification/xp-float-label";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SkeletonCard } from "@/components/ui/skeleton-card";
+import { SignInRequiredModal } from "@/components/ui/sign-in-required-modal";
 import { fireHabitConfetti } from "@/lib/confetti-burst";
 import { parseHabitUiMeta, serializeHabitUiMeta } from "@/lib/habit-ui-meta";
 import type { OnboardingGoalKey, SuggestedHabit } from "@/lib/onboarding";
@@ -51,7 +52,7 @@ const defaultForm = {
 
 export default function HabitsPage() {
   const { data: session } = useSession();
-  const { requireAuth } = useAuthModal();
+  const { requireAuth, openAuthModal } = useAuthModal();
   const [habits, setHabits] = useState<Habit[]>([]);
   const [logs, setLogs] = useState<LogRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,6 +70,7 @@ export default function HabitsPage() {
   const [aiSugGoal, setAiSugGoal] = useState<OnboardingGoalKey | null>(null);
   const [aiSugCustomLabel, setAiSugCustomLabel] = useState<string | null>(null);
   const [addingSuggestionKey, setAddingSuggestionKey] = useState<string | null>(null);
+  const [signInPromptOpen, setSignInPromptOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!session?.user?.id) {
@@ -395,10 +397,23 @@ export default function HabitsPage() {
     void load();
   }
 
-  const openNewForm = requireAuth(() => setFormOpen(true));
+  const openNewForm = () => {
+    if (!session?.user) {
+      setSignInPromptOpen(true);
+      return;
+    }
+    setFormOpen(true);
+  };
 
   return (
     <>
+    <SignInRequiredModal
+      open={signInPromptOpen}
+      title="Please sign in to create habits"
+      message="Create and save habits to start building streaks and seeing analytics."
+      onClose={() => setSignInPromptOpen(false)}
+      onSignIn={openAuthModal}
+    />
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>

@@ -122,6 +122,7 @@ export function DashboardHome() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { requireAuth } = useAuthModal();
+  const [now, setNow] = useState(() => new Date());
   const [overview, setOverview] = useState<Overview | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsOverviewPayload | null>(null);
   const [todayTasks, setTodayTasks] = useState<{ id: string; title: string; priority: string; status: string }[]>([]);
@@ -137,6 +138,12 @@ export function DashboardHome() {
   const [moodToday, setMoodToday] = useState<{ moodScore: number } | null>(null);
 
   const todayKey = format(startOfDay(new Date()), "yyyy-MM-dd");
+
+  useEffect(() => {
+    // Keep dashboard date in sync across midnight without refresh.
+    const id = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const load = useCallback(async () => {
     if (!session?.user?.id) {
@@ -382,7 +389,7 @@ export function DashboardHome() {
             {greeting(firstName)}
           </p>
           <p className="mt-1 text-sm text-text-muted">
-            {format(new Date(), "EEEE, MMMM d, yyyy")} ·{" "}
+            {format(now, "EEEE, MMMM d, yyyy")} ·{" "}
             <span className="font-mono text-text">{remainingToday}</span> habits remaining today
           </p>
         </div>

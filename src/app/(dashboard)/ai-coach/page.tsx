@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import { Send } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useAuthModal } from "@/components/auth/auth-modal-context";
+import { useSession } from "next-auth/react";
 
 type ChatTurn = { role: "user" | "assistant"; text: string };
 
@@ -20,7 +21,8 @@ const chips: { label: string; detail?: boolean }[] = [
 ];
 
 export default function AICoachPage() {
-  const { requireAuth } = useAuthModal();
+  const { requireAuth, openAuthModal } = useAuthModal();
+  const { data: session, status } = useSession();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatTurn[]>([]);
   const [loading, setLoading] = useState(false);
@@ -88,6 +90,15 @@ export default function AICoachPage() {
         <p className="mt-1 text-sm text-text-muted">Your personal habit coach</p>
       </div>
 
+      {status !== "loading" && !session?.user ? (
+        <div className="mb-4 rounded-xl border border-border bg-canvas px-4 py-3 text-sm text-text">
+          <span className="font-semibold text-primary">Sign in to chat with your AI Coach.</span>{" "}
+          <button type="button" className="font-medium text-primary underline underline-offset-2" onClick={openAuthModal}>
+            Sign In
+          </button>
+        </div>
+      ) : null}
+
       <div className="app-card flex flex-1 flex-col overflow-hidden p-0">
         <div className="max-h-[52vh] flex-1 space-y-4 overflow-y-auto px-4 py-4 md:max-h-[60vh]">
           <AnimatePresence initial={false}>
@@ -133,10 +144,14 @@ export default function AICoachPage() {
                 key={c.label}
                 type="button"
                 className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-muted transition hover:border-primary/50 hover:text-text"
-                onClick={requireAuth(() => {
-                  setInput(c.label);
-                  void send(c.label, { detailReport: c.detail });
-                })}
+                onClick={
+                  session?.user
+                    ? () => {
+                        setInput(c.label);
+                        void send(c.label, { detailReport: c.detail });
+                      }
+                    : openAuthModal
+                }
               >
                 {c.label}
               </button>
@@ -151,15 +166,19 @@ export default function AICoachPage() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  requireAuth(() => void send(input))();
+                  if (!session?.user) openAuthModal();
+                  else void send(input);
                 }
               }}
             />
             <button
               type="button"
               className="btn-primary inline-flex shrink-0 items-center gap-2 px-4"
-              disabled={loading}
-              onClick={requireAuth(() => void send(input))}
+              disabled={loading || status === "loading"}
+              onClick={() => {
+                if (!session?.user) openAuthModal();
+                else void send(input);
+              }}
             >
               <Send className="h-4 w-4" />
               Send
