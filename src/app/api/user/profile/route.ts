@@ -12,7 +12,7 @@ function normalizeDisplayName(value: string) {
 export async function PATCH(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = (await request.json()) as {
       displayName?: string;
@@ -51,8 +51,7 @@ export async function PATCH(request: Request) {
         where: { username: norm },
         select: { id: true },
       });
-      const sessionUserId = session.user.id ?? null;
-      if (taken && (!sessionUserId || taken.id !== sessionUserId)) {
+      if (taken && taken.id !== session.user.id) {
         return NextResponse.json({ error: "Username is already taken." }, { status: 400 });
       }
       data.username = norm;
@@ -62,20 +61,9 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "No valid fields to update." }, { status: 400 });
     }
 
-    const email = session.user.email.trim().toLowerCase();
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: {
-        ...(session.user.name ? { name: session.user.name } : {}),
-        ...(session.user.image ? { image: session.user.image } : {}),
-        ...data,
-      },
-      create: {
-        email,
-        name: session.user.name ?? null,
-        image: session.user.image ?? null,
-        ...data,
-      },
+    const user = await prisma.user.update({
+      where: { id: session.user.id },
+      data,
       select: {
         id: true,
         name: true,

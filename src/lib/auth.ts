@@ -1,4 +1,3 @@
-import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
@@ -34,7 +33,7 @@ async function loadUserJwtFields(userId: string) {
   }
 }
 
-async function upsertOAuthUserByEmail(input: {
+async function ensureUserByEmail(input: {
   email: string;
   name?: string | null;
   image?: string | null;
@@ -42,29 +41,26 @@ async function upsertOAuthUserByEmail(input: {
   const email = input.email.trim().toLowerCase();
   if (!email) return null;
   try {
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: {
-        ...(input.name ? { name: input.name } : {}),
-        ...(input.image ? { image: input.image } : {}),
-      },
-      create: {
-        email,
-        name: input.name ?? null,
-        image: input.image ?? null,
-      },
-      select: { id: true, username: true },
-    });
-    return user;
+    const id = crypto.randomUUID();
+    const rows = await prisma.$queryRaw<Array<{ id: string; username: string | null }>>`
+      INSERT INTO "User" ("id", "email", "name", "image", "createdAt", "updatedAt")
+      VALUES (${id}, ${email}, ${input.name ?? null}, ${input.image ?? null}, NOW(), NOW())
+      ON CONFLICT ("email")
+      DO UPDATE SET
+        "name" = COALESCE(EXCLUDED."name", "User"."name"),
+        "image" = COALESCE(EXCLUDED."image", "User"."image"),
+        "updatedAt" = NOW()
+      RETURNING "id", "username"
+    `;
+    return rows[0] ?? null;
   } catch (error) {
-    console.error("[next-auth][upsertOAuthUserByEmail]", error);
+    console.error("[next-auth][ensureUserByEmail]", error);
     return null;
   }
 }
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
-  adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt" },
   providers: [
     GoogleProvider({
@@ -79,9 +75,15 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials.password) return null;
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-        });
+        const rows = await prisma.$queryRaw<
+          Array<{ id: string; email: string; name: string | null; passwordHash: string | null }>
+        >`
+          SELECT "id", "email", "name", "passwordHash"
+          FROM "User"
+          WHERE "email" = ${credentials.email.trim().toLowerCase()}
+          LIMIT 1
+        `;
+        const user = rows[0];
         if (!user?.passwordHash) return null;
         const isValid = await bcrypt.compare(credentials.password, user.passwordHash);
         return isValid ? { id: user.id, email: user.email, name: user.name } : null;
@@ -98,7 +100,7 @@ export const authOptions: NextAuthOptions = {
           console.error("[next-auth][signIn] Google profile missing email", { profile });
           return false;
         }
-        const persisted = await upsertOAuthUserByEmail({
+        const persisted = await ensureUserByEmail({
           email,
           name: user.name ?? (typeof googleProfile?.name === "string" ? googleProfile.name : null),
           image: user.image ?? (typeof googleProfile?.picture === "string" ? googleProfile.picture : null),
@@ -134,7 +136,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         if (!token.sub && typeof token.email === "string") {
-          const persisted = await upsertOAuthUserByEmail({
+          const persisted = await ensureUserByEmail({
             email: token.email,
             name: typeof token.name === "string" ? token.name : null,
             image: typeof token.picture === "string" ? token.picture : null,
@@ -167,7 +169,7 @@ export const authOptions: NextAuthOptions = {
           }
           session.user.onboardingCompleted = token.onboardingCompleted ?? true;
         } else if (session.user && session.user.email) {
-          const persisted = await upsertOAuthUserByEmail({
+          const persisted = await ensureUserByEmail({
             email: session.user.email,
             name: session.user.name ?? null,
             image: session.user.image ?? null,
@@ -200,20 +202,6 @@ export const authOptions: NextAuthOptions = {
         }
       }
       return session;
-    },
-  },
-  events: {
-    async createUser({ user }) {
-      try {
-        if (!user?.email) return;
-        await upsertOAuthUserByEmail({
-          email: user.email,
-          name: user.name ?? null,
-          image: user.image ?? null,
-        });
-      } catch (error) {
-        console.error("[next-auth][events.createUser]", error);
-      }
     },
   },
   pages: {

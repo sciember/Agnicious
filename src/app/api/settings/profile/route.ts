@@ -7,20 +7,10 @@ import { maskEmail } from "@/lib/user-public";
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const email = session.user.email.trim().toLowerCase();
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: {
-        ...(session.user.name ? { name: session.user.name } : {}),
-        ...(session.user.image ? { image: session.user.image } : {}),
-      },
-      create: {
-        email,
-        name: session.user.name ?? null,
-        image: session.user.image ?? null,
-      },
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
       select: {
         id: true,
         name: true,
@@ -33,6 +23,7 @@ export async function GET() {
         onboardingGoal: true,
       },
     });
+    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     const { email: userEmail, ...rest } = user;
     return NextResponse.json({
