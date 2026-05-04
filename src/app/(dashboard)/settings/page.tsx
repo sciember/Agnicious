@@ -133,13 +133,14 @@ export default function SettingsPage() {
       toast.error("Display name must be at least 2 characters.");
       return;
     }
+    const normalizedUsername = normalizeUsername(username);
     setSavingIdentity(true);
     const res = await fetch("/api/user/profile", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         displayName: trimmed,
-        username: normalizeUsername(username),
+        ...(normalizedUsername ? { username: normalizedUsername } : {}),
         bio: bio.slice(0, 140) || null,
       }),
     });
@@ -352,7 +353,11 @@ export default function SettingsPage() {
               <button
                 type="button"
                 className="btn-primary w-full sm:w-auto"
-                disabled={savingIdentity || usernameState !== "ok"}
+                disabled={
+                  savingIdentity ||
+                  displayName.trim().length < 2 ||
+                  (normalizeUsername(username) ? usernameState !== "ok" : false)
+                }
                 onClick={() => void saveIdentity()}
               >
                 {savingIdentity ? "Saving…" : "Save"}
