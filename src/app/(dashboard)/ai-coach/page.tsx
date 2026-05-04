@@ -21,7 +21,7 @@ const chips: { label: string; detail?: boolean }[] = [
 ];
 
 export default function AICoachPage() {
-  const { requireAuth, openAuthModal } = useAuthModal();
+  const { openAuthModal } = useAuthModal();
   const { data: session, status } = useSession();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatTurn[]>([]);

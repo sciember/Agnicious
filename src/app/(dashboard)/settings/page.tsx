@@ -1,13 +1,15 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { AnimatePresence, motion } from "framer-motion";
 import toast from "react-hot-toast";
 import { Camera, Download, Lock, Palette, Shield, Sparkles, Trash2 } from "lucide-react";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { SkeletonLoader } from "@/components/ui/skeleton-loader";
+import { EmptyState } from "@/components/ui/empty-state";
+import { useAuthModal } from "@/components/auth/auth-modal-context";
 import { publicDisplayName } from "@/lib/user-public";
 import { normalizeUsername, validateUsernameFormat } from "@/lib/username";
 
@@ -27,6 +29,8 @@ function sectionCard(children: React.ReactNode) {
 }
 
 export default function SettingsPage() {
+  const { data: session, status, update } = useSession();
+  const { openAuthModal } = useAuthModal();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [displayName, setDisplayName] = useState("");
@@ -44,6 +48,16 @@ export default function SettingsPage() {
   const label = publicDisplayName(profile?.displayName, profile?.name);
 
   useEffect(() => {
+    if (status === "loading") return;
+    if (!session?.user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setProfile(null);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoading(false);
+      return;
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true);
     fetch("/api/settings/profile")
       .then((r) => (r.ok ? r.json() : null))
       .then((data: Profile | null) => {
@@ -55,20 +69,23 @@ export default function SettingsPage() {
       })
       .catch(() => toast.error("Could not load settings."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [session?.user, status]);
 
   useEffect(() => {
     const norm = normalizeUsername(username);
     if (!norm) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUsernameState("idle");
       return;
     }
     const format = validateUsernameFormat(norm);
     if (!format.ok) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUsernameState("bad");
       return;
     }
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUsernameState("checking");
     const id = setTimeout(async () => {
       const r = await fetch(`/api/user/check-username?u=${encodeURIComponent(norm)}`);
@@ -135,6 +152,8 @@ export default function SettingsPage() {
     setProfile(data as Profile);
     setUsername(data && "username" in data && typeof data.username === "string" ? `@${data.username}` : "");
     toast.success("Profile updated!");
+    // Refresh NextAuth JWT/session fields (e.g. username) so the rest of the app updates immediately.
+    await update();
   }
 
   async function onPhotoPick(e: React.ChangeEvent<HTMLInputElement>) {
@@ -188,7 +207,7 @@ export default function SettingsPage() {
     await signOut({ callbackUrl: "/" });
   }
 
-  if (loading || !profile) {
+  if (status === "loading" || loading) {
     return (
       <div className="mx-auto max-w-[600px] px-3 py-8">
         <div className="app-card">
@@ -198,6 +217,34 @@ export default function SettingsPage() {
             <SkeletonLoader variant="list" lines={2} />
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (!session?.user) {
+    return (
+      <div className="mx-auto max-w-[600px] px-3 py-8">
+        <EmptyState
+          illustration="people"
+          title="Sign in to manage settings"
+          description="Update your display name, username, and preferences after signing in."
+          ctaLabel="Sign In"
+          onCta={openAuthModal}
+        />
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="mx-auto max-w-[600px] px-3 py-8">
+        <EmptyState
+          illustration="journey"
+          title="Could not load settings"
+          description="Please refresh the page. If this keeps happening, try signing out and signing back in."
+          ctaLabel="Retry"
+          onCta={() => window.location.reload()}
+        />
       </div>
     );
   }
