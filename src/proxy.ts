@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-export function middleware() {
+export function proxy() {
   // Public exploration mode: never block route access here.
   return NextResponse.next();
 }

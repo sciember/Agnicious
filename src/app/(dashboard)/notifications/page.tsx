@@ -76,7 +76,6 @@ export default function NotificationsPage() {
   }, [session?.user, status]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 

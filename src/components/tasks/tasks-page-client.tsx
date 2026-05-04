@@ -374,7 +374,6 @@ export function TasksPageClient() {
 
   async function deleteTask(id: string) {
     const prevTasks = tasks;
-    const removed = tasks.find((t) => t.id === id);
     setTasks((ts) => ts.filter((t) => t.id !== id));
     setMenuTaskId(null);
     const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });

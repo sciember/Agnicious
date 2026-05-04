@@ -50,13 +50,10 @@ export default function SettingsPage() {
   useEffect(() => {
     if (status === "loading") return;
     if (!session?.user) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setProfile(null);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return;
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     fetch("/api/settings/profile")
       .then((r) => (r.ok ? r.json() : null))
@@ -74,18 +71,15 @@ export default function SettingsPage() {
   useEffect(() => {
     const norm = normalizeUsername(username);
     if (!norm) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUsernameState("idle");
       return;
     }
     const format = validateUsernameFormat(norm);
     if (!format.ok) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUsernameState("bad");
       return;
     }
     let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUsernameState("checking");
     const id = setTimeout(async () => {
       const r = await fetch(`/api/user/check-username?u=${encodeURIComponent(norm)}`);

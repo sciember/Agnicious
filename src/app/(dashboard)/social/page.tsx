@@ -409,10 +409,11 @@ export default function SocialPage() {
               className="input-field"
               autoComplete="off"
               aria-autocomplete="list"
-              aria-expanded={addTypeaheadOpen && (addTypeaheadLoading || addTypeaheadResults.length > 0)}
+              aria-controls="social-friend-search-results"
             />
             {addTypeaheadOpen && session?.user && targetUsername.trim().replace(/^@+/, "").length >= 1 ? (
               <ul
+                id="social-friend-search-results"
                 className="absolute z-30 mt-1 max-h-52 w-full overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-lg"
                 role="listbox"
               >
@@ -422,7 +423,7 @@ export default function SocialPage() {
                   <li className="px-3 py-2 text-xs text-text-muted">No users found</li>
                 ) : (
                   addTypeaheadResults.map((u) => (
-                    <li key={u.id} role="option">
+                    <li key={u.id} role="option" aria-selected={false}>
                       <button
                         type="button"
                         className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-canvas"

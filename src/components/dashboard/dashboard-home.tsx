@@ -203,7 +203,7 @@ export function DashboardHome() {
       setLevelUpOpen(true);
     }
     prevLevelRef.current = L;
-  }, [overview?.level]);
+  }, [overview]);
 
   const logsByDay = useMemo(() => {
     const m = new Map<string, Set<string>>();

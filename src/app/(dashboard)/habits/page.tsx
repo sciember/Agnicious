@@ -99,7 +99,6 @@ export default function HabitsPage() {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 
@@ -133,7 +132,6 @@ export default function HabitsPage() {
   }, [session?.user?.id]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchAiSuggestions();
   }, [fetchAiSuggestions]);
 
