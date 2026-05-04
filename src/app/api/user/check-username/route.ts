@@ -22,8 +22,22 @@ export async function GET(request: Request) {
   if (!existing) {
     return NextResponse.json({ available: true });
   }
+
+  // Fast path: session id matches owner.
   if (session?.user?.id && existing.id === session.user.id) {
     return NextResponse.json({ available: true });
   }
+
+  // Repair stale session-id cases by resolving current user via session email.
+  if (session?.user?.email) {
+    const me = await prisma.user.findUnique({
+      where: { email: session.user.email.trim().toLowerCase() },
+      select: { id: true },
+    });
+    if (me?.id && me.id === existing.id) {
+      return NextResponse.json({ available: true });
+    }
+  }
+
   return NextResponse.json({ available: false });
 }

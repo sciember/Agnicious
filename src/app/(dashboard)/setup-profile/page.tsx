@@ -19,15 +19,34 @@ export default function SetupProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [checkingExisting, setCheckingExisting] = useState(true);
 
   useEffect(() => {
-    if (status === "authenticated") {
-      if (session?.user?.username) {
-        router.replace("/");
-        return;
-      }
-      setDisplayName(session?.user?.name ?? "");
+    if (status !== "authenticated") return;
+    if (session?.user?.username) {
+      router.replace("/");
+      return;
     }
+    let cancelled = false;
+    fetch("/api/settings/profile")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { username?: string | null; displayName?: string | null; name?: string | null } | null) => {
+        if (cancelled) return;
+        if (typeof data?.username === "string" && data.username.length > 0) {
+          router.replace("/dashboard");
+          return;
+        }
+        setDisplayName(data?.displayName ?? data?.name ?? session?.user?.name ?? "");
+      })
+      .catch(() => {
+        if (!cancelled) setDisplayName(session?.user?.name ?? "");
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingExisting(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [status, session?.user?.name, session?.user?.username, router]);
 
   useEffect(() => {
@@ -94,6 +113,8 @@ export default function SetupProfilePage() {
       return;
     }
     await update();
+    // Prevent stale-session redirect loops; DB now has username.
+    if (session?.user?.id) localStorage.setItem(SKIP_PREFIX + session.user.id, "1");
     router.replace("/dashboard");
   }
 
@@ -102,7 +123,7 @@ export default function SetupProfilePage() {
     router.replace("/dashboard");
   }
 
-  if (status === "loading") return null;
+  if (status === "loading" || checkingExisting) return null;
 
   return (
     <div className="flex min-h-[calc(100vh-64px)] items-center justify-center px-4 py-10">
