@@ -12,7 +12,7 @@ function normalizeDisplayName(value: string) {
 export async function PATCH(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = (await request.json()) as {
       displayName?: string;
@@ -61,20 +61,65 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "No valid fields to update." }, { status: 400 });
     }
 
-    const user = await prisma.user.update({
-      where: { id: session.user.id },
-      data,
-      select: {
-        id: true,
-        name: true,
-        displayName: true,
-        username: true,
-        bio: true,
-        avatarUrl: true,
-        image: true,
-        email: true,
-      },
-    });
+    const email = session.user.email.trim().toLowerCase();
+
+    let user:
+      | {
+          id: string;
+          name: string | null;
+          displayName: string | null;
+          username: string | null;
+          bio: string | null;
+          avatarUrl: string | null;
+          image: string | null;
+          email: string;
+        }
+      | null = null;
+
+    if (session.user.id) {
+      try {
+        user = await prisma.user.update({
+          where: { id: session.user.id },
+          data,
+          select: {
+            id: true,
+            name: true,
+            displayName: true,
+            username: true,
+            bio: true,
+            avatarUrl: true,
+            image: true,
+            email: true,
+          },
+        });
+      } catch (error) {
+        const known = error as { code?: string };
+        if (known?.code !== "P2025") throw error;
+      }
+    }
+
+    if (!user) {
+      await prisma.$queryRaw`
+        INSERT INTO "User" ("id", "email", "name", "image", "createdAt", "updatedAt")
+        VALUES (${crypto.randomUUID()}, ${email}, ${session.user.name ?? null}, ${session.user.image ?? null}, NOW(), NOW())
+        ON CONFLICT ("email")
+        DO UPDATE SET "updatedAt" = NOW()
+      `;
+      user = await prisma.user.update({
+        where: { email },
+        data,
+        select: {
+          id: true,
+          name: true,
+          displayName: true,
+          username: true,
+          bio: true,
+          avatarUrl: true,
+          image: true,
+          email: true,
+        },
+      });
+    }
 
     const { email: userEmail, ...rest } = user;
     return NextResponse.json({
