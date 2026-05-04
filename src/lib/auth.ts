@@ -33,6 +33,23 @@ async function loadUserJwtFields(userId: string) {
   }
 }
 
+async function getUserIdByEmail(email: string) {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return null;
+  try {
+    const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
+      FROM "User"
+      WHERE "email" = ${normalized}
+      LIMIT 1
+    `;
+    return rows[0]?.id ?? null;
+  } catch (error) {
+    console.error("[next-auth][getUserIdByEmail]", error);
+    return null;
+  }
+}
+
 async function ensureUserByEmail(input: {
   email: string;
   name?: string | null;
@@ -126,16 +143,18 @@ export const authOptions: NextAuthOptions = {
       }
       return baseUrl;
     },
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user, trigger, account }) {
       try {
-        if (user?.id) {
+        // Credentials sign-in already returns DB user id.
+        if (user?.id && account?.provider === "credentials") {
           token.sub = user.id;
           const fields = await loadUserJwtFields(user.id);
           token.username = fields.username;
           token.onboardingCompleted = fields.onboardingCompleted;
         }
 
-        if (!token.sub && typeof token.email === "string") {
+        // For OAuth, never trust provider id for app user id; always map by DB email.
+        if (typeof token.email === "string") {
           const persisted = await ensureUserByEmail({
             email: token.email,
             name: typeof token.name === "string" ? token.name : null,
@@ -148,10 +167,41 @@ export const authOptions: NextAuthOptions = {
           }
         }
 
+        // Self-heal stale token.sub values by remapping from email.
+        if (token.sub && typeof token.email === "string") {
+          const fields = await loadUserJwtFields(token.sub);
+          if (fields.username === null) {
+            const dbUserId = await getUserIdByEmail(token.email);
+            if (dbUserId && dbUserId !== token.sub) {
+              token.sub = dbUserId;
+              const repaired = await loadUserJwtFields(dbUserId);
+              token.username = repaired.username;
+              token.onboardingCompleted = repaired.onboardingCompleted;
+            } else {
+              token.username = fields.username;
+              token.onboardingCompleted = fields.onboardingCompleted;
+            }
+          } else {
+            token.username = fields.username;
+            token.onboardingCompleted = fields.onboardingCompleted;
+          }
+        }
+
         if (trigger === "update" && token.sub) {
           const fields = await loadUserJwtFields(token.sub);
           token.username = fields.username;
           token.onboardingCompleted = fields.onboardingCompleted;
+
+          // If update trigger still sees stale id, repair once more via email.
+          if (fields.username === null && typeof token.email === "string") {
+            const dbUserId = await getUserIdByEmail(token.email);
+            if (dbUserId && dbUserId !== token.sub) {
+              token.sub = dbUserId;
+              const repaired = await loadUserJwtFields(dbUserId);
+              token.username = repaired.username;
+              token.onboardingCompleted = repaired.onboardingCompleted;
+            }
+          }
         }
       } catch (error) {
         console.error("[next-auth][jwt callback]", error);
