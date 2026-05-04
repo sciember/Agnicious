@@ -382,8 +382,9 @@ export function ProductivityAnalytics() {
               </div>
             </ChartCard>
             <ChartCard title="Per-habit completion %">
-              <div className="h-60 min-h-[240px] w-full min-w-0">
+              <div className="min-h-[240px] w-full min-w-0">
                 {radialHabits.length ? (
+                  <div className="h-60 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <RadialBarChart
                       cx="50%"
@@ -399,8 +400,9 @@ export function ProductivityAnalytics() {
                       <Legend wrapperStyle={{ fontSize: 10, color: CHART.tick }} />
                     </RadialBarChart>
                   </ResponsiveContainer>
+                  </div>
                 ) : (
-                  <div className="py-8">
+                  <div className="flex min-h-[240px] w-full flex-col items-center justify-center py-6">
                     <EmptyState
                       illustration="chart"
                       title="No habits yet"
@@ -449,7 +451,12 @@ export function ProductivityAnalytics() {
                 </p>
               </>
             ) : (
-              <p className="text-sm text-text-muted">Loading…</p>
+              <div className="space-y-3">
+                <div className="skeleton-shimmer h-4 w-24 rounded-lg" />
+                <div className="skeleton-shimmer h-7 w-28 rounded-xl" />
+                <div className="skeleton-shimmer h-4 w-28 rounded-lg" />
+                <div className="skeleton-shimmer h-7 w-24 rounded-xl" />
+              </div>
             )}
           </div>
           <ChartCard title="14-day trend (1 = low, 5 = great)" className="lg:col-span-2">

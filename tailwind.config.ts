@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss";
 
 /**
- * Agnicious — Tailwind v4 reads tokens from `src/app/globals.css` (`@theme inline`).
+ * Sciember — Tailwind v4 reads tokens from `src/app/globals.css` (`@theme inline`).
  *
  * Light palette (reference):
  * - Page: `--bg` #F9FAFB · Main column: `--bg-canvas` #F3F4F6 · Surfaces/cards: #FFFFFF

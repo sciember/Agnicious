@@ -83,7 +83,16 @@ export default function OnboardingPage() {
   if (status === "loading") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background text-text-muted">
-        Loading…
+        <div className="w-full max-w-sm px-6">
+          <div className="app-card">
+            <div className="space-y-4">
+              <div className="skeleton-shimmer h-6 w-40 rounded-full" />
+              <div className="skeleton-shimmer h-4 w-full rounded-lg" />
+              <div className="skeleton-shimmer h-4 w-3/4 rounded-lg" />
+              <div className="skeleton-shimmer h-10 w-full rounded-xl" />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -95,7 +104,7 @@ export default function OnboardingPage() {
           <Link href="/" className="text-sm font-medium text-primary hover:underline">
             ← Back
           </Link>
-          <h1 className="mt-6 text-2xl font-semibold tracking-tight">Welcome to Agnicious</h1>
+          <h1 className="mt-6 text-2xl font-semibold tracking-tight">Welcome to Sciember</h1>
           <p className="mt-2 text-sm text-text-muted">Three quick steps to personalize your journey.</p>
           <div className="mt-6 flex justify-center gap-2">
             {[0, 1, 2].map((i) => (

@@ -73,7 +73,7 @@ export function AuthModal() {
 
             <div className="mb-5 flex flex-col items-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-xl font-bold text-white">A</div>
-              <p className="mt-2 text-xs font-semibold tracking-wide text-[#6B7280]">Agnicious</p>
+              <p className="mt-2 text-xs font-semibold tracking-wide text-[#6B7280]">Sciember</p>
             </div>
 
             <h2 id="auth-modal-title" className="text-center text-xl font-semibold text-[#111827]">

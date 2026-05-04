@@ -109,7 +109,7 @@ export default function SetupProfilePage() {
       <div className="w-full max-w-[480px] rounded-2xl border border-border bg-white p-6 shadow-sm">
         <div className="mb-6 text-center">
           <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-indigo-600 text-lg font-bold text-white">A</div>
-          <h1 className="text-2xl font-semibold text-text">Welcome to Agnicious! 🎉</h1>
+          <h1 className="text-2xl font-semibold text-text">Welcome to Sciember! 🎉</h1>
           <p className="mt-1 text-sm text-text-muted">Set up your profile to get started</p>
         </div>
 

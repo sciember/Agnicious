@@ -17,8 +17,8 @@ const dmMono = DM_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Agnicious",
-  description: "Agnicious habit platform with AI coaching, streaks, and social motivation.",
+  title: "Sciember",
+  description: "Sciember habit platform with AI coaching, streaks, and social motivation.",
 };
 
 export default function RootLayout({

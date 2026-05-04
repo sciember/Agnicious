@@ -450,7 +450,11 @@ export default function SocialPage() {
               {!session?.user ? (
                 <p className="text-sm text-text-muted">Sign in to see requests.</p>
               ) : loading ? (
-                <p className="text-sm text-text-muted">Loading…</p>
+                <div className="space-y-2">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="skeleton-shimmer h-10 w-full rounded-xl" />
+                  ))}
+                </div>
               ) : friends !== undefined && friends.length === 0 ? (
                 <EmptyState
                   illustration="people"

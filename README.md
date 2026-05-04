@@ -2,6 +2,8 @@
 
 Modern SaaS-ready habit tracker built with Next.js App Router, Prisma/Postgres, NextAuth, and Tailwind.
 
+App name: **Sciember**
+
 ### Tech Stack
 
 - Next.js 16 + React 19

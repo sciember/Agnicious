@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import { Camera, Download, Lock, Palette, Shield, Sparkles, Trash2 } from "lucide-react";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { SkeletonLoader } from "@/components/ui/skeleton-loader";
 import { publicDisplayName } from "@/lib/user-public";
 import { normalizeUsername, validateUsernameFormat } from "@/lib/username";
 
@@ -190,7 +191,13 @@ export default function SettingsPage() {
   if (loading || !profile) {
     return (
       <div className="mx-auto max-w-[600px] px-3 py-8">
-        <p className="text-center text-sm text-text-muted">Loading…</p>
+        <div className="app-card">
+          <div className="space-y-4">
+            <SkeletonLoader variant="pill" className="mx-auto h-6 w-40" />
+            <SkeletonLoader variant="list" lines={3} />
+            <SkeletonLoader variant="list" lines={2} />
+          </div>
+        </div>
       </div>
     );
   }
