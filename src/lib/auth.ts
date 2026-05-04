@@ -92,6 +92,7 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user, account, profile }) {
       try {
         if (account?.provider !== "google") return true;
+        const googleProfile = profile as { email?: string; name?: string; picture?: string } | undefined;
         const email = user.email ?? (typeof profile?.email === "string" ? profile.email : null);
         if (!email) {
           console.error("[next-auth][signIn] Google profile missing email", { profile });
@@ -99,8 +100,8 @@ export const authOptions: NextAuthOptions = {
         }
         const persisted = await upsertOAuthUserByEmail({
           email,
-          name: user.name ?? (typeof profile?.name === "string" ? profile.name : null),
-          image: user.image ?? (typeof profile?.picture === "string" ? profile.picture : null),
+          name: user.name ?? (typeof googleProfile?.name === "string" ? googleProfile.name : null),
+          image: user.image ?? (typeof googleProfile?.picture === "string" ? googleProfile.picture : null),
         });
         if (!persisted) {
           return "/sign-in?error=OAuthPersistFailed";
